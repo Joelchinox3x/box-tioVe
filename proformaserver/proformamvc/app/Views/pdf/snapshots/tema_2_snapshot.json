@@ -1,0 +1,17 @@
+{
+    "version": "1.0",
+    "saved_at": "2026-01-21 19:07:45",
+    "id": 2,
+    "nombre": "blue",
+    "color_brand": "#004481",
+    "icon": "ph-buildings",
+    "header_php": "header_blue.php",
+    "footer_img": "footer_azul-pro_166.png",
+    "fondo_img": "fondo-azul-pro.png",
+    "title_font": "dynapuff",
+    "title_size": 43,
+    "title_bold": 1,
+    "title_color": "#ffffff",
+    "activo": 1,
+    "es_default": 0
+}

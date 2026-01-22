@@ -1,0 +1,8 @@
+body { font-family: sans-serif; font-size: 11px; color: #333; }
+.text-brand { color: #f37021; }
+.bg-brand { background-color: #f37021; color: white; }
+.border-brand { border: 1px solid #f37021; }
+h1 { font-size: 18px; border-bottom: 2px solid #f37021; margin-bottom: 15px; }
+table { width: 100%; border-collapse: collapse; }
+td { padding: 5px; }
+.img-container { text-align: center; border: 1px solid #ddd; padding: 5px; }

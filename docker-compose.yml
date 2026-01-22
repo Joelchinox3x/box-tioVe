@@ -1,0 +1,71 @@
+services:
+  # 1. Servicio de Base de Datos (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: mi_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Cocacola@123   # Contraseña del root (Cámbiala en producción)
+      MYSQL_DATABASE: eventobox_db       # Base de datos que se crea al iniciar
+      MYSQL_USER: server_admin
+      MYSQL_PASSWORD: Cocacola123
+    ports:
+      - "3306:3306" # Para que puedas conectarte desde tu PC (DBeaver, Workbench)
+    volumes:
+      - db_data:/var/lib/mysql
+
+  # 2. Servicio Backend (PHP-FPM)
+  backend:
+    build: ./docker/php
+    container_name: mi_php_backend
+    volumes:
+      - ./backend:/var/www/html # Conecta tu carpeta local con el contenedor
+    depends_on:
+      - db
+      
+  # 3. NUEVO SERVICIO: Proforma App
+  proforma-app:
+    build: ./docker/php
+    container_name: proforma-app
+    volumes:
+      - ./proformaserver/proforma-app:/var/www/proforma-app
+      - proforma_uploads:/var/www/proforma-app/uploads  # Volumen persistente para uploads
+    depends_on:
+      - db
+
+  # 4. NUEVO SERVICIO: Proforma App_mvc
+  proformamvc:
+    build: ./docker/php
+    container_name: proformamvc
+    volumes:
+      - ./proformaserver/proformamvc:/var/www/proformamvc
+    
+    depends_on:
+      - db
+
+  # 5. Servicio Web Server (Nginx)
+  webserver:
+    image: nginx:alpine
+    container_name: mi_nginx
+    ports:
+      - "80:80" # Tu API estará disponible en localhost:80
+      - "443:443" # Puerto HTTPS
+
+    volumes:
+      - ./backend:/var/www/html # Nginx necesita ver los archivos también
+      - ./proformaserver/proforma-app:/var/www/proforma-app
+      - ./proformaserver/proformamvc:/var/www/proformamvc
+      - ./frontend/dist:/var/www/app # Frontend build de React
+      - proforma_uploads:/var/www/proforma-app/uploads  # Acceso a uploads de proforma-app
+
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro # Certificados SSL de Let's Encrypt (solo lectura)
+    depends_on:
+      - backend
+      - proforma-app
+      - proformamvc
+     
+volumes:
+  db_data:
+  proforma_uploads:  # Volumen persistente para uploads de proforma-app
+  

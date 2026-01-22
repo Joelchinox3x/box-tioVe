@@ -1,0 +1,17 @@
+{
+    "version": "1.0",
+    "saved_at": "2026-01-21 19:07:54",
+    "id": 3,
+    "nombre": "simple",
+    "color_brand": "#333333",
+    "icon": "ph-printer",
+    "header_php": "header_simple.php",
+    "footer_img": "footer_simple_123.png",
+    "fondo_img": "fondo5.png",
+    "title_font": "robotocondensed",
+    "title_size": 29,
+    "title_bold": 1,
+    "title_color": "#000000",
+    "activo": 1,
+    "es_default": 0
+}

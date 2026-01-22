@@ -1,0 +1,17 @@
+{
+    "version": "1.0",
+    "saved_at": "2026-01-21 18:26:45",
+    "id": 4,
+    "nombre": "rojo-kill",
+    "color_brand": "#048af1",
+    "icon": "ph-heart",
+    "header_php": "header_simple.php",
+    "footer_img": null,
+    "fondo_img": "fondo_1768800223.png",
+    "title_font": "robotocondensed",
+    "title_size": 34,
+    "title_bold": 1,
+    "title_color": "#2107e4",
+    "activo": 1,
+    "es_default": 0
+}
