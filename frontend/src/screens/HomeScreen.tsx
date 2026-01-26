@@ -19,6 +19,8 @@ import {
   FighterCarousel,
   ScheduledFights,
   GeneralTicketBanner,
+  FighterCTABanner,
+  BannerCarousel,
   type Category,
 } from '../components/home';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,9 +47,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const loadEventData = async () => {
     try {
-      console.log('🔄 Cargando eventos...');
       const response = await api.get('/eventos');
-      console.log('✅ Eventos cargados exitosamente:', response.data);
       setEventData(response.data);
     } catch (error: any) {
       console.error('❌ Error al cargar eventos:', error);
@@ -90,7 +90,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   };
 
   const handleTicketPress = () => {
-    navigation.navigate('Register');
+    // Navegar a compra de boletos con el ID del evento actual
+    const eventoId = eventData?.evento?.id || 1;
+    navigation.navigate('BuyTickets', { eventoId });
   };
 
   if (loading) {
@@ -108,23 +110,24 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-      {/* Header personalizado */}
+      {/* Header Premium Box TioVE */}
       <Header
-        eventTitle={eventData?.evento?.titulo || 'Noche Corporativa'}
+        eventTitle="EL JAB DORADO"
         isLive={true}
         onNotificationPress={handleNotificationPress}
         onProfilePress={handleProfilePress}
       />
 
-      {/* Tabs de categorías */}
+      {/* Tabs de categorías 
       <CategoryTabs
         categories={categories}
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
-      />
+      /> */}
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Sección: Evento Estelar */}
@@ -191,24 +194,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           />
         )}
 
-        {/* Banner de Entradas General */}
+        {/* Slider Dinámico de Banners */}
+        <BannerCarousel onPress={() => navigation.navigate('FighterForm')} />
+
+        {/* Banner de Entradas El Jab Dorado */}
         <GeneralTicketBanner
           onPress={handleTicketPress}
-          title="Entradas General"
-          subtitle="Asegura tu lugar en el evento más esperado del año"
-          buttonText="Comprar Ahora"
+          title="EL JAB DORADO"
+          subtitle="Sábado 22 de Febrero - Santa Clara"
+          buttonText="COMPRAR S/. 10"
         />
 
-        {/* Botones de acción adicionales */}
-        <View style={styles.actionsSection}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('FighterForm')}
-          >
-            <Ionicons name="fitness" size={24} color={COLORS.primary} />
-            <Text style={styles.actionButtonText}>QUIERO PELEAR</Text>
-          </TouchableOpacity>
+        {/* Banner de Registro de Peleador - MAS VISIBLE 
+        <FighterCTABanner onPress={() => navigation.navigate('FighterForm')} /> */}
 
+        <View style={styles.actionsSection}>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('Fighters')}
@@ -254,6 +254,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: SPACING.xl,
   },
   section: {
     paddingVertical: SPACING.lg,
@@ -337,6 +340,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomSpacer: {
-    height: 20,
+    height: 150,
   },
 });

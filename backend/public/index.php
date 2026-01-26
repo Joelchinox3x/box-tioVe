@@ -198,6 +198,10 @@ try {
 
                 echo json_encode($controller->registrarEspectador($data));
 
+            } elseif ($method === 'GET' && $id && $id !== 'verificar-email' && $id !== 'login' && !$action) {
+                // GET /api/usuarios/{id} - Obtener perfil por ID
+                echo json_encode($controller->getById($id));
+
             } elseif ($method === 'POST' && $id === 'login') {
                 // POST /api/usuarios/login - Iniciar sesión
                 $data = json_decode(file_get_contents("php://input"), true);
@@ -215,6 +219,11 @@ try {
                 }
 
                 echo json_encode($controller->updateProfile($id, $data));
+
+            } elseif ($method === 'GET' && $id === 'verificar-email') {
+                // GET /api/usuarios/verificar-email?email=xxx
+                $email = $_GET['email'] ?? '';
+                echo json_encode($controller->verificarEmail($email));
 
             } else {
                 http_response_code(404);
@@ -235,6 +244,35 @@ try {
             } else {
                 http_response_code(404);
                 echo json_encode(["error" => "Endpoint no encontrado"]);
+            }
+            break;
+
+        // ========== BANNERS (DINÁMICO) ==========
+        case 'banners':
+            require_once __DIR__ . '/../controllers/BannersController.php';
+            $controller = new BannersController($db);
+
+            if ($method === 'GET') {
+                // GET /api/banners - Listar (admin=todos, public=solo activos)
+                $onlyActive = !isset($_GET['admin']); // Si no dice admin, es publico
+                echo json_encode($controller->listar($onlyActive));
+
+            } elseif ($method === 'POST') {
+                // POST /api/banners - Subir nuevo
+                echo json_encode($controller->subir($_FILES));
+
+            } elseif ($method === 'PUT' && $id) {
+                // PUT /api/banners/{id} - Activar/Desactivar
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->actualizar($id, $data));
+
+            } elseif ($method === 'DELETE' && $id) {
+                // DELETE /api/banners/{id}
+                echo json_encode($controller->eliminar($id));
+
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint banner no encontrado"]);
             }
             break;
 
@@ -308,6 +346,72 @@ try {
             } else {
                 http_response_code(404);
                 echo json_encode(["error" => "Endpoint admin no encontrado"]);
+            }
+            break;
+
+        // ========== BOLETOS ==========
+        case 'boletos':
+            // Prevenir ejecución del ruteo interno del controlador
+            define('SKIP_ROUTING', true);
+            require_once __DIR__ . '/../controllers/BoletosController.php';
+            $controller = new BoletosController($db);
+
+            if ($method === 'GET' && $id === 'tipos-boleto' && $action) {
+                // GET /api/boletos/tipos-boleto/{eventoId}
+                $controller->getTiposBoleto($action);
+
+            } elseif ($method === 'POST' && $id === 'comprar') {
+                // POST /api/boletos/comprar
+                $controller->crearSolicitudCompra();
+
+            } elseif ($method === 'GET' && $id === 'pendientes') {
+                // GET /api/boletos/pendientes
+                $controller->getPagosPendientes();
+
+            } elseif ($method === 'PUT' && $id && $action === 'validar') {
+                // PUT /api/boletos/{id}/validar
+                $controller->validarPago($id);
+
+            } elseif ($method === 'POST' && $id === 'validar-qr') {
+                // POST /api/boletos/validar-qr
+                $controller->validarQR();
+
+            } elseif ($method === 'POST' && $id && $action === 'comprobante') {
+                // POST /api/boletos/{id}/comprobante
+                $controller->subirComprobante($id);
+
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint boletos no encontrado: $method $id/$action"]);
+            }
+            break;
+
+        // ========== TIPOS DE BOLETO (ADMIN) ==========
+        case 'tipos-boleto':
+            require_once __DIR__ . '/../controllers/TiposBoletosController.php';
+            $controller = new TiposBoletosController($db);
+
+            if ($method === 'POST' && $id === 'crear') {
+                // POST /api/tipos-boleto/crear
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->crear($data));
+
+            } elseif ($method === 'PUT' && $id === 'editar' && $action) {
+                // PUT /api/tipos-boleto/editar/{id}
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->editar($action, $data));
+
+            } elseif ($method === 'DELETE' && $id) {
+                // DELETE /api/tipos-boleto/{id}
+                echo json_encode($controller->desactivar($id));
+
+            } elseif ($method === 'GET' && $id === 'evento' && $action) {
+                // GET /api/tipos-boleto/evento/{evento_id}
+                echo json_encode($controller->getTiposPorEvento($action));
+
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint tipos-boleto no encontrado"]);
             }
             break;
 

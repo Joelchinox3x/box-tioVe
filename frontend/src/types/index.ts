@@ -21,14 +21,14 @@ export interface Fighter {
 
 export interface Event {
   id: number;
-  titulo: string;
+  nombre: string;
   descripcion?: string;
-  fecha_evento: string;
-  lugar: string;
-  direccion?: string;
-  precio_entrada?: number;
-  estado: 'activo' | 'finalizado' | 'cancelado';
-  imagen?: string;
+  fecha: string;
+  hora: string;
+  direccion: string;
+  ciudad?: string;
+  estado: 'proximamente' | 'en_curso' | 'finalizado' | 'cancelado';
+  imagen_banner?: string;
 }
 
 export interface FightMatch {
@@ -73,7 +73,83 @@ export interface ApiResponse<T> {
 }
 
 export interface EventData {
-  evento: Event;
+  evento: Event | null;
   peleadores_destacados: Fighter[];
   peleas_pactadas: FightMatch[];
+}
+
+// Tipos de Boletos
+export interface TipoBoleto {
+  id: number;
+  evento_id: number;
+  nombre: string;
+  precio: number;
+  cantidad_total: number;
+  cantidad_vendida: number;
+  cantidad_disponible: number;
+  color_hex: string;
+  descripcion?: string;
+  orden: number;
+  activo: boolean;
+}
+
+export interface BoletoVendido {
+  id: number;
+  evento_id: number;
+  tipo_boleto_id: number;
+  vendedor_id?: number;
+  comprador_nombres_apellidos: string;
+  comprador_telefono: string;
+  comprador_dni: string;
+  cantidad: number;
+  precio_total: number;
+  codigo_qr: string;
+  metodo_pago: 'yape' | 'transferencia' | 'efectivo';
+  comprobante_pago?: string;
+  estado_pago: 'pendiente' | 'verificado' | 'rechazado';
+  estado_boleto: 'activo' | 'usado' | 'cancelado';
+  fecha_compra: string;
+  fecha_validacion?: string;
+  fecha_uso?: string;
+  observaciones?: string;
+  // Datos adicionales del JOIN
+  tipo_boleto_nombre?: string;
+  color_hex?: string;
+  evento_nombre?: string;
+  evento_fecha?: string;
+  evento_hora?: string;
+  evento_direccion?: string;
+}
+
+export interface ComprarBoletoRequest {
+  tipo_boleto_id: number;
+  comprador_nombres_apellidos: string;
+  comprador_telefono: string;
+  comprador_dni: string;
+  cantidad: number;
+  metodo_pago: 'yape' | 'transferencia' | 'efectivo';
+  comprobante_pago?: string;
+  vendedor_id?: number;
+}
+
+export interface ReporteBoletos {
+  resumen_por_tipo: ResumenPorTipo[];
+  totales: TotalesReporte;
+}
+
+export interface ResumenPorTipo {
+  tipo_boleto: string;
+  precio: number;
+  total_vendidos: number;
+  cantidad_boletos: number;
+  ingresos_total: number;
+  pendientes: number;
+  verificados: number;
+  rechazados: number;
+}
+
+export interface TotalesReporte {
+  total_ventas: number;
+  total_boletos: number;
+  ingresos_totales: number;
 }

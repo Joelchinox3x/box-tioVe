@@ -5,17 +5,19 @@ import ApprovalFighters from './ApprovalFighters';
 import ClubsManagement from './ClubsManagement';
 import AssignOwners from './AssignOwners';
 import PaymentManagement from './PaymentManagement';
+import AdminBannerScreen from './AdminBannerScreen';
 
-type AdminSection = 'dashboard' | 'fighters' | 'clubs' | 'owners' | 'payments';
+type AdminSection = 'dashboard' | 'fighters' | 'clubs' | 'owners' | 'payments' | 'banners';
 
 interface Estadisticas {
   peleadores_pendientes: number;
   peleadores_aprobados: number;
   clubs_activos: number;
   usuarios_activos: number;
+  banners_activos?: number;
 }
 
-export default function AdminPanel() {
+export default function AdminPanel({ navigation }: any) {
   const [currentSection, setCurrentSection] = useState<AdminSection>('dashboard');
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,6 +103,24 @@ export default function AdminPanel() {
           <Text style={styles.actionTitle}>Gestionar Pagos</Text>
           <Text style={styles.actionDesc}>Inscripciones y confirmación de pagos</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionCard, { backgroundColor: '#8e44ad' }]}
+          onPress={() => setCurrentSection('banners')}
+        >
+          <Text style={styles.actionIcon}>🖼️</Text>
+          <Text style={styles.actionTitle}>Banners Home</Text>
+          <Text style={styles.actionDesc}>Gestionar "¿Quieres Pelear?"</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionCard, { backgroundColor: '#e67e22' }]}
+          onPress={() => navigation.navigate('AdminBoletos')}
+        >
+          <Text style={styles.actionIcon}>🎫</Text>
+          <Text style={styles.actionTitle}>Gestionar Boletos</Text>
+          <Text style={styles.actionDesc}>Ventas, pagos y validación de entradas</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -155,6 +175,15 @@ export default function AdminPanel() {
             Pagos
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navItem, currentSection === 'banners' && styles.navItemActive]}
+          onPress={() => setCurrentSection('banners')}
+        >
+          <Text style={[styles.navText, currentSection === 'banners' && styles.navTextActive]}>
+            Banners
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Contenido - Render directo sin wrapper condicional */}
@@ -171,6 +200,8 @@ export default function AdminPanel() {
       {currentSection === 'owners' && <AssignOwners />}
 
       {currentSection === 'payments' && <PaymentManagement />}
+
+      {currentSection === 'banners' && <AdminBannerScreen />}
     </SafeAreaView>
   );
 }

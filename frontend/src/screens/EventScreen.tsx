@@ -78,7 +78,7 @@ export default function EventScreen({ navigation }: EventScreenProps) {
                 <Text style={styles.liveText}>EVENTO ACTIVO</Text>
               </View>
 
-              <Text style={styles.eventTitle}>{evento.titulo}</Text>
+              <Text style={styles.eventTitle}>{evento.nombre}</Text>
 
               {evento.descripcion && (
                 <Text style={styles.eventDescription}>{evento.descripcion}</Text>
@@ -91,12 +91,27 @@ export default function EventScreen({ navigation }: EventScreenProps) {
                   <View style={styles.infoTextContainer}>
                     <Text style={styles.infoLabel}>Fecha</Text>
                     <Text style={styles.infoValue}>
-                      {new Date(evento.fecha_evento).toLocaleDateString('es-ES', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+                      {(() => {
+                        if (!evento.fecha) return 'Fecha no disponible';
+
+                        // Crear fecha desde el ISO string de MySQL
+                        const fecha = new Date(evento.fecha);
+
+                        // Formatear fecha
+                        const fechaFormateada = fecha.toLocaleDateString('es-ES', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        });
+
+                        // Agregar hora si existe
+                        const horaFormateada = evento.hora
+                          ? ` - ${evento.hora.substring(0, 5)}`
+                          : '';
+
+                        return `${fechaFormateada}${horaFormateada}`;
+                      })()}
                     </Text>
                   </View>
                 </View>
@@ -105,24 +120,12 @@ export default function EventScreen({ navigation }: EventScreenProps) {
                   <Ionicons name="location" size={20} color={COLORS.primary} />
                   <View style={styles.infoTextContainer}>
                     <Text style={styles.infoLabel}>Lugar</Text>
-                    <Text style={styles.infoValue}>{evento.lugar}</Text>
-                    {evento.direccion && (
-                      <Text style={styles.infoSubtext}>{evento.direccion}</Text>
+                    <Text style={styles.infoValue}>{evento.direccion}</Text>
+                    {evento.ciudad && (
+                      <Text style={styles.infoSubtext}>{evento.ciudad}</Text>
                     )}
                   </View>
                 </View>
-
-                {evento.precio_entrada && (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="cash" size={20} color={COLORS.primary} />
-                    <View style={styles.infoTextContainer}>
-                      <Text style={styles.infoLabel}>Precio de Entrada</Text>
-                      <Text style={styles.priceValue}>
-                        S/ {parseFloat(evento.precio_entrada.toString()).toFixed(2)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
 
                 <View style={styles.infoRow}>
                   <Ionicons name="trophy" size={20} color={COLORS.primary} />
@@ -155,7 +158,7 @@ export default function EventScreen({ navigation }: EventScreenProps) {
             {/* Botón de compra */}
             <TouchableOpacity
               style={styles.buyButton}
-              onPress={() => navigation.navigate('Register')}
+              onPress={() => navigation.navigate('BuyTickets', { eventoId: evento.id })}
             >
               <Ionicons name="ticket" size={24} color={COLORS.text.inverse} />
               <Text style={styles.buyButtonText}>COMPRAR ENTRADAS</Text>
@@ -292,7 +295,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 4,
   },
-  status_activo: {
+  status_proximamente: {
+    backgroundColor: COLORS.primary,
+    color: COLORS.text.inverse,
+  },
+  status_en_curso: {
     backgroundColor: COLORS.success,
     color: COLORS.text.inverse,
   },
