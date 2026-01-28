@@ -1,0 +1,16 @@
+{
+  "name": "mcp-antigravity",
+  "version": "1.0.0",
+  "description": "MCP Server for EventoBox Database and API Access",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "mysql2": "^3.9.0",
+    "axios": "^1.6.0",
+    "node-fetch": "^3.3.0"
+  },
+  "type": "module" 
+}

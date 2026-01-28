@@ -1,4 +1,5 @@
 // Tema de la aplicación - Evento Box
+import { createShadow } from '../utils/shadows';
 
 export const COLORS = {
   // Colores principales
@@ -68,26 +69,11 @@ export const BORDER_RADIUS = {
   full: 9999,
 };
 
+// Sombras con soporte multi-plataforma (Web + iOS/Android)
+// Automáticamente usa boxShadow en web y shadowColor/shadowOffset en nativo
 export const SHADOWS = {
-  sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  md: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  lg: {
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
+  sm: createShadow('#000', 0, 1, 0.2, 2, 2),
+  md: createShadow('#000', 0, 2, 0.25, 4, 4),
+  lg: createShadow('#FFD700', 0, 4, 0.3, 8, 6),
+  xl: createShadow('#000', 0, 10, 0.3, 20, 10),
 };

@@ -138,6 +138,14 @@ export const boletosService = {
   },
 
   /**
+   * Activar tipo de boleto (ADMIN)
+   */
+  async activarTipoBoleto(id: number) {
+    const response = await api.put(`/tipos-boleto/activar/${id}`);
+    return response.data;
+  },
+
+  /**
    * Obtener todos los tipos de boleto de un evento (ADMIN)
    */
   async getTiposPorEvento(eventoId: number): Promise<TipoBoleto[]> {

@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { createTextShadow } from '../../utils/shadows';
 
 interface HeaderProps {
   eventTitle?: string;
@@ -12,73 +14,90 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  eventTitle = 'Noche Corporativa',
+  eventTitle = 'El Jab Dorado',
   isLive = true,
   onNotificationPress,
   onProfilePress,
   userRole,
 }) => {
   return (
-    <View style={styles.container}>
-      {/* Logo y título del evento */}
-      <View style={styles.leftSection}>
-        <View style={styles.logoContainer}>
-          <Ionicons name="calendar" size={28} color={COLORS.primary} />
-        </View>
-        <View style={styles.titleContainer}>
-          {isLive && (
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>LIVE EVENT</Text>
+    <View style={styles.outerContainer}>
+      <ImageBackground
+        source={require('../../../assets/el_jab_dorado_hero_bg.png')}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+      >
+        <LinearGradient
+          colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
+          style={styles.container}
+        >
+          {/* Logo y título del evento */}
+          <View style={styles.leftSection}>
+            <View style={styles.logoContainer}>
+              <Text style={styles.brandText}>Box TioVE</Text>
             </View>
-          )}
-          <Text style={styles.eventTitle} numberOfLines={1}>
-            {eventTitle}
-          </Text>
-        </View>
-      </View>
-
-      {/* Acciones derecha */}
-      <View style={styles.rightSection}>
-        {/* Botón de notificaciones */}
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={onNotificationPress}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="notifications-outline" size={24} color={COLORS.text.primary} />
-          {/* Badge de notificaciones pendientes */}
-          <View style={styles.notificationBadge}>
-            <View style={styles.notificationDot} />
+            <View style={styles.titleContainer}>
+              {isLive && (
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>EL RING DE LOS CAMPEONES</Text>
+                </View>
+              )}
+              <Text style={styles.eventTitle} numberOfLines={1}>
+                {eventTitle}
+              </Text>
+            </View>
           </View>
-        </TouchableOpacity>
 
-        {/* Botón de perfil */}
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={onProfilePress}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="person" size={20} color={COLORS.text.inverse} />
-          {userRole === 'admin' && (
-            <Text style={styles.roleText}>Admin</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          {/* Acciones derecha */}
+          <View style={styles.rightSection}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={onNotificationPress}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#FFF" />
+              <View style={styles.notificationBadge}>
+                <View style={styles.notificationDot} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={onProfilePress}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="person" size={20} color="#000" />
+              {userRole === 'admin' && (
+                <Text style={styles.roleText}>Admin</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </ImageBackground>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    height: 90,
+    backgroundColor: '#000',
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+  },
   container: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.background,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.primary,
+    paddingTop: Platform.OS === 'ios' ? 10 : 0,
   },
   leftSection: {
     flexDirection: 'row',
@@ -86,13 +105,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logoContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
     marginRight: SPACING.md,
+  },
+  brandText: {
+    color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   titleContainer: {
     flex: 1,
@@ -110,15 +135,17 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   liveText: {
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.secondary,
-    letterSpacing: 0.5,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFF',
+    letterSpacing: 1,
   },
   eventTitle: {
-    fontSize: TYPOGRAPHY.fontSize.xl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFF',
+    letterSpacing: 0.5,
+    ...createTextShadow('rgba(0, 0, 0, 0.5)', 1, 1, 3),
   },
   rightSection: {
     flexDirection: 'row',
@@ -128,16 +155,16 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.surface,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
   notificationBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 10,
+    right: 10,
   },
   notificationDot: {
     width: 8,
@@ -145,7 +172,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: COLORS.error,
     borderWidth: 2,
-    borderColor: COLORS.surface,
+    borderColor: '#000',
   },
   profileButton: {
     flexDirection: 'row',
@@ -159,6 +186,6 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.inverse,
+    color: '#000',
   },
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useAuth } from '../hooks/useAuth';
+// import { useAuth } from '../hooks/useAuth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,7 +8,9 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredRole = 'admin' }: ProtectedRouteProps) {
-  const { user } = useAuth();
+  // TODO: Implement useAuth hook or equivalent authentication logic
+  // const { user } = useAuth();
+  const user = null as { id: number; nombre: string; tipo_nombre: string } | null;
 
   // Si no hay usuario, mostrar mensaje de no autorizado
   if (!user) {

@@ -44,6 +44,18 @@
         "projectId": "4b81be8b-54e1-40ec-a16f-42e3a97d85a7"
       }
     },
-    "owner": "joelchino"
+    "owner": "joelchino",
+    "plugins": [
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Necesitamos acceso a tus fotos para que puedas subir tu perfil de peleador.",
+          "cameraPermission": "Necesitamos acceso a tu cámara para tomar tu foto de perfil de peleador."
+        }
+      ],
+      "expo-font",
+      "expo-asset"
+    ]
   }
 }

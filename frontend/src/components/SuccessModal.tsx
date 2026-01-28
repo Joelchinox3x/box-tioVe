@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants/theme';
+import { createShadow } from '../utils/shadows';
 
 interface SuccessModalProps {
   visible: boolean;
@@ -70,11 +71,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 500,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...createShadow('#000', 0, 4, 0.3, 8, 8),
   },
   iconContainer: {
     marginBottom: SPACING.lg,

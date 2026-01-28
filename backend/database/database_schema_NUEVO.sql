@@ -112,11 +112,11 @@ CREATE TABLE usuarios (
 -- ========================================
 CREATE TABLE eventos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    titulo VARCHAR(200) NOT NULL,
+    nombre VARCHAR(200) NOT NULL,
     descripcion TEXT,
-    fecha_evento DATETIME NOT NULL,
-    lugar VARCHAR(200) NOT NULL,
-    direccion VARCHAR(300),
+    fecha DATE NOT NULL,
+    hora TIME NOT NULL,
+    direccion VARCHAR(300) NOT NULL,
     ciudad VARCHAR(100),
     precio_entrada_general DECIMAL(10,2),
     precio_entrada_vip DECIMAL(10,2),
@@ -130,7 +130,7 @@ CREATE TABLE eventos (
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     INDEX idx_estado (estado),
-    INDEX idx_fecha (fecha_evento)
+    INDEX idx_fecha (fecha)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ========================================
@@ -295,12 +295,12 @@ INSERT INTO usuarios (nombre, email, password_hash, tipo_id, club_id) VALUES
 ('Juan Pérez', 'juan@elcampeon.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 4, 1);
 
 -- Insertar evento principal
-INSERT INTO eventos (titulo, descripcion, fecha_evento, lugar, direccion, ciudad, precio_entrada_general, precio_entrada_vip, capacidad_total, estado, reglas_torneo) VALUES
+INSERT INTO eventos (nombre, descripcion, fecha, hora, direccion, ciudad, precio_entrada_general, precio_entrada_vip, capacidad_total, estado, reglas_torneo) VALUES
 ('EL JAB DORADO 2026',
  'El evento de boxeo más esperado del año. Peleas emocionantes, ambiente familiar y grandes premios.',
- '2025-03-15 19:00:00',
- 'Los Llanos - Santa Clara',
- 'Parque de los Llanos',
+ '2025-03-15',
+ '19:00:00',
+ 'Parque Los Llanos, Los Llanos - Santa Clara',
  'Lima',
  10.00,
  15.00,

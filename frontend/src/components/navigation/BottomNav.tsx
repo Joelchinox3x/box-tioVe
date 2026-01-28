@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { createShadow } from '../../utils/shadows';
 
 export interface NavItem {
   id: string;
@@ -100,11 +101,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 10,
     backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
+    ...createShadow('#000', 0, -3, 0.3, 4, 8),
   },
   navContainer: {
     flexDirection: 'row',

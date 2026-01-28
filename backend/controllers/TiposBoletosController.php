@@ -186,6 +186,40 @@ class TiposBoletosController {
     }
 
     /**
+     * Activar tipo de boleto
+     * PUT /tipos-boleto/activar/{id}
+     */
+    public function activar($id) {
+        try {
+            $query = "UPDATE tipos_boleto SET activo = 1 WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+
+            if ($stmt->rowCount() === 0) {
+                http_response_code(404);
+                return [
+                    "success" => false,
+                    "message" => "Tipo de boleto no encontrado"
+                ];
+            }
+
+            return [
+                "success" => true,
+                "message" => "Tipo de boleto activado exitosamente"
+            ];
+
+        } catch (PDOException $e) {
+            error_log("Error en activar tipo boleto: " . $e->getMessage());
+            http_response_code(500);
+            return [
+                "success" => false,
+                "message" => "Error al activar tipo de boleto"
+            ];
+        }
+    }
+
+    /**
      * Obtener todos los tipos de boleto de un evento
      * GET /tipos-boleto/evento/{evento_id}
      */

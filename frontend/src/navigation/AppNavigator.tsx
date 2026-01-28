@@ -10,7 +10,7 @@ import FightersScreen from '../screens/FightersScreen';
 import FighterDetailScreen from '../screens/FighterDetailScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import FighterFormScreen from '../screens/FighterFormScreen';
+import FighterFormScreen from '../screens/FighterForm';
 import RegisterUserScreen from '../screens/RegisterUserScreen';
 import LoginScreen from '../screens/LoginScreen';
 import BuyTicketsScreen from '../screens/BuyTicketsScreenNEW';

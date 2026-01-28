@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "proforma-mysql": {
+      "command": "node",
+      "args": ["/home/server/evento-box/mcp/server.js"],
+      "type": "stdio",
+      "env": {}
+    }
+  }
+}

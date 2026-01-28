@@ -386,8 +386,9 @@ class AdminController {
                 p.apodo as peleador_apodo,
                 p.documento_identidad as peleador_dni,
                 -- Datos del evento
-                e.titulo as evento_titulo,
-                e.fecha_evento,
+                e.nombre as evento_nombre,
+                e.fecha as evento_fecha,
+                e.hora as evento_hora,
                 e.precio_inscripcion_peleador as precio_evento,
                 -- Datos del club
                 c.nombre as club_nombre

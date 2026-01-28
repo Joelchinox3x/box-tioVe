@@ -15,7 +15,7 @@ class EventosController {
      */
     public function getEventoPrincipal() {
         // Obtener evento activo
-        $query = "SELECT * FROM eventos WHERE estado = 'proximamente' ORDER BY fecha_evento DESC LIMIT 1";
+        $query = "SELECT * FROM eventos WHERE estado = 'proximamente' ORDER BY fecha DESC LIMIT 1";
         $stmt = $this->db->prepare($query);
         $stmt->execute();
         $evento = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -112,7 +112,7 @@ class EventosController {
             "evento" => $evento,
             "peleadores_destacados" => $peleadores_destacados,
             "peleas_pactadas" => $peleas_pactadas,
-            "countdown" => $this->calcularCountdown($evento['fecha_evento'])
+            "countdown" => $this->calcularCountdown($evento['fecha'], $evento['hora'])
         ];
     }
 
@@ -124,11 +124,11 @@ class EventosController {
 
         foreach ($data as $key => $value) {
             // Convertir números
-            if (in_array($key, ['id', 'capacidad_total', 'entradas_vendidas', 'victorias', 'derrotas', 'empates', 'total_promociones', 'experiencia_anos'])) {
+            if (in_array($key, ['id', 'capacidad_total', 'victorias', 'derrotas', 'empates', 'total_promociones', 'experiencia_anos'])) {
                 $data[$key] = (int)$value;
             }
             // Convertir decimales
-            if (in_array($key, ['precio_entrada_general', 'precio_entrada_vip', 'peso_actual', 'altura'])) {
+            if (in_array($key, ['peso_actual', 'altura'])) {
                 $data[$key] = (float)$value;
             }
             // Convertir booleanos
@@ -143,9 +143,9 @@ class EventosController {
     /**
      * Calcular tiempo restante para el evento
      */
-    private function calcularCountdown($fecha_evento) {
+    private function calcularCountdown($fecha, $hora) {
         $ahora = new DateTime();
-        $evento = new DateTime($fecha_evento);
+        $evento = new DateTime($fecha . ' ' . $hora);
         $diff = $ahora->diff($evento);
 
         return [

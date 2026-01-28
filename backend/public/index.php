@@ -247,6 +247,20 @@ try {
             }
             break;
 
+        // ========== CARD TEMPLATES (FONDOS Y BORDES) ==========
+        case 'card-templates':
+            require_once __DIR__ . '/../controllers/CardTemplatesController.php';
+            $controller = new CardTemplatesController();
+
+            if ($method === 'GET' && ($id === 'backgrounds' || $id === 'borders')) {
+                // GET /api/card-templates/backgrounds (o borders)
+                echo json_encode($controller->listar($id));
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint no encontrado"]);
+            }
+            break;
+
         // ========== BANNERS (DINÁMICO) ==========
         case 'banners':
             require_once __DIR__ . '/../controllers/BannersController.php';
@@ -401,6 +415,10 @@ try {
                 $data = json_decode(file_get_contents("php://input"), true);
                 echo json_encode($controller->editar($action, $data));
 
+            } elseif ($method === 'PUT' && $id === 'activar' && $action) {
+                // PUT /api/tipos-boleto/activar/{id}
+                echo json_encode($controller->activar($action));
+
             } elseif ($method === 'DELETE' && $id) {
                 // DELETE /api/tipos-boleto/{id}
                 echo json_encode($controller->desactivar($id));
@@ -455,6 +473,18 @@ try {
                     'ultimos_usuarios' => $ultimos_usuarios,
                     'ultimos_peleadores' => $ultimos_peleadores
                 ], JSON_PRETTY_PRINT);
+            }
+            break;
+
+        // ========== TEST PROOF (HTML) ==========
+        case 'test-proof':
+            $file = __DIR__ . '/proof.html';
+            if (file_exists($file)) {
+                header('Content-Type: text/html');
+                readfile($file);
+                exit;
+            } else {
+                echo "Archivo proof.html no encontrado en " . $file;
             }
             break;
 

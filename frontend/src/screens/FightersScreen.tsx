@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { createShadow } from '../utils/shadows';
 import api from '../services/api';
 
 interface Peleador {
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
   countText: { fontSize: 10, color: COLORS.text.secondary, fontWeight: 'bold' },
 
   list: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.xl, paddingTop: SPACING.sm },
-  compactCard: { backgroundColor: COLORS.surface, borderRadius: 12, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border.primary, padding: SPACING.md, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  compactCard: { backgroundColor: COLORS.surface, borderRadius: 12, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border.primary, padding: SPACING.md, ...createShadow("#000", 0, 2, 0.1, 4, 3) },
   cardContent: { flexDirection: 'row', alignItems: 'center' },
   
   avatarContainer: { 

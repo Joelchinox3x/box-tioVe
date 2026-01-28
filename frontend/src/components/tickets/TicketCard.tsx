@@ -38,7 +38,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
       )}
 
       <LinearGradient
-        colors={ticket.gradientColors}
+        colors={ticket.gradientColors as [string, string, ...string[]]}
         style={styles.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}

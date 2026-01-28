@@ -24,7 +24,7 @@ class PeleasController {
             p2.id as p2_id, p2.apodo as p2_apodo, p2.foto_perfil as p2_foto,
             p2.club as p2_club, p2.victorias as p2_victorias, p2.derrotas as p2_derrotas,
             u2.nombre as p2_nombre,
-            e.titulo as evento_nombre, e.fecha_evento
+            e.nombre as evento_nombre, e.fecha as evento_fecha, e.hora as evento_hora
             FROM peleas pel
             JOIN peleadores p1 ON pel.peleador_1_id = p1.id
             JOIN usuarios u1 ON p1.usuario_id = u1.id
@@ -73,7 +73,8 @@ class PeleasController {
                 ],
                 "evento" => [
                     "nombre" => $pelea['evento_nombre'],
-                    "fecha" => $pelea['fecha_evento']
+                    "fecha" => $pelea['evento_fecha'],
+                    "hora" => $pelea['evento_hora']
                 ]
             ];
         }

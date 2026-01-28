@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { LogBox } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
+import { WebLayoutContainer } from './src/components/layout/WebLayoutContainer';
 
 export default function App() {
   useEffect(() => {
@@ -14,5 +15,9 @@ export default function App() {
     ]);
   }, []);
 
-  return <AppNavigator />;
+  return (
+    <WebLayoutContainer>
+      <AppNavigator />
+    </WebLayoutContainer>
+  );
 }

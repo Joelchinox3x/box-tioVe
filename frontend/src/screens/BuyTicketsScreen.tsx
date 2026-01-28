@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants/theme';
+import { ScreenHeader } from '../components/common/ScreenHeader';
 import { TicketCard, TicketType, OrderSummary } from '../components/tickets';
 
 interface BuyTicketsScreenProps {
@@ -26,7 +27,7 @@ export default function BuyTicketsScreen({ navigation }: BuyTicketsScreenProps) 
     {
       id: 'general',
       name: 'Entrada General',
-      price: 50.00,
+      price: 10.00,
       description: 'Acceso al evento completo',
       benefits: [
         'Acceso a todas las peleas',
@@ -167,20 +168,8 @@ export default function BuyTicketsScreen({ navigation }: BuyTicketsScreenProps) 
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Comprar Entradas</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ScreenHeader title="COMPRAR ENTRADAS" />
 
       <ScrollView
         style={styles.scrollView}
@@ -191,9 +180,9 @@ export default function BuyTicketsScreen({ navigation }: BuyTicketsScreenProps) 
         <View style={styles.eventInfo}>
           <View style={styles.eventBadge}>
             <Ionicons name="calendar" size={18} color={COLORS.primary} />
-            <Text style={styles.eventText}>Noche Corporativa de Boxeo 2025</Text>
+            <Text style={styles.eventText}>Box TioVE - El Jab Dorado</Text>
           </View>
-          <Text style={styles.eventSubtext}>Sábado 15 de Febrero • 6:00 PM</Text>
+          <Text style={styles.eventSubtext}>Sábado 22 de Febrero • 9:00 AM</Text>
         </View>
 
         {/* Tarjetas de entradas */}
@@ -354,6 +343,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xxl, // Padding extra para evitar que el navbar tape el contenido
   },
   eventInfo: {
     marginTop: SPACING.lg,
@@ -464,6 +454,6 @@ const styles = StyleSheet.create({
     color: COLORS.text.inverse,
   },
   bottomSpacer: {
-    height: 100,
+    height: 150, // Espacio extra para el navbar inferior
   },
 });

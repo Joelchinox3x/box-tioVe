@@ -6,9 +6,10 @@ const API_BASE_URL = 'https://boxtiove.com/api';
 // Crear instancia de axios
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // Aumentado a 30 segundos para conexiones lentas
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    // Nota: 'Host' es automático y lo maneja el navegador
   },
 });
 

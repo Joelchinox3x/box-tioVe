@@ -17,6 +17,8 @@ import { FormSection } from '../components/form/FormSection';
 import { FormInput } from '../components/form/FormInput';
 import { SubmitButton } from '../components/form/SubmitButton';
 import { SuccessModal } from '../components/SuccessModal';
+import { ErrorModal } from '../components/ErrorModal';
+import { ScreenHeader } from '../components/common/ScreenHeader';
 import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -41,6 +43,8 @@ export default function LoginScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [successData, setSuccessData] = useState<{ nombre: string } | null>(null);
 
   useEffect(() => {
@@ -144,7 +148,9 @@ export default function LoginScreen() {
         errorMessage = 'No se pudo conectar con el servidor.';
       }
 
-      Alert.alert('Error de Inicio de Sesión', errorMessage, [{ text: 'OK' }]);
+      setErrorMessage(errorMessage);
+      setShowErrorModal(true);
+      // Alert.alert('Error de Inicio de Sesión', errorMessage, [{ text: 'OK' }]);
     } finally {
       setIsSubmitting(false);
     }
@@ -152,20 +158,16 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ScreenHeader title="INICIAR SESIÓN" />
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Ionicons name="log-in" size={64} color={COLORS.primary} />
-          <Text style={styles.headerTitle}>INICIAR SESIÓN</Text>
-          <Text style={styles.headerSubtitle}>
-            Accede a tu cuenta de El Jab Dorado
-          </Text>
+        <View style={styles.loginContent}>
+          <Ionicons name="log-in" size={64} color={COLORS.primary} style={styles.loginIcon} />
         </View>
 
         <View style={styles.formContainer}>
@@ -199,6 +201,8 @@ export default function LoginScreen() {
           <SubmitButton
             onPress={handleLogin}
             isLoading={isSubmitting}
+            title="INICIAR SESIÓN"
+            icon="🔐"
           />
 
           {/* Botón de registro */}
@@ -223,6 +227,13 @@ export default function LoginScreen() {
         buttonText="Ir a Mi Perfil"
         onClose={handleCloseSuccessModal}
       />
+
+      <ErrorModal
+        visible={showErrorModal}
+        title="Error de Acceso"
+        message={errorMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -236,23 +247,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SPACING.xxl,
+    paddingBottom: 130, // Aumentado por solicitud
   },
-  header: {
-    padding: SPACING.xl,
+  loginContent: {
     alignItems: 'center',
-    gap: SPACING.md,
+    paddingVertical: SPACING.xl,
   },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
+  loginIcon: {
+    marginBottom: SPACING.md,
   },
   formContainer: {
     paddingHorizontal: SPACING.lg,

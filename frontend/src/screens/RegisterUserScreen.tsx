@@ -17,11 +17,13 @@ import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants/theme';
+import { ScreenHeader } from '../components/common/ScreenHeader';
 import { FormSection } from '../components/form/FormSection';
 import { FormInput } from '../components/form/FormInput';
 import { FormSelect } from '../components/form/FormSelect';
 import { PhoneInput } from '../components/form/PhoneInput';
 import { SubmitButton } from '../components/form/SubmitButton';
+import { ClubSelector } from '../components/form/ClubSelector';
 import { SuccessModal } from '../components/SuccessModal';
 import { clubService, Club } from '../services/clubService';
 import api from '../services/api';
@@ -296,20 +298,14 @@ export default function RegisterUserScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ScreenHeader title="CREAR CUENTA" />
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>CREAR CUENTA</Text>
-          <Text style={styles.headerSubtitle}>
-            Regístrate para disfrutar de los eventos de boxeo
-          </Text>
-        </View>
 
         <View style={styles.formContainer}>
           {/* Foto de Perfil */}
@@ -430,16 +426,12 @@ export default function RegisterUserScreen() {
                 <Text style={styles.loadingText}>Cargando clubs...</Text>
               </View>
             ) : (
-              <FormSelect
+              <ClubSelector
                 label="¿A qué club apoyas?"
                 value={formData.club_id}
                 onValueChange={(value) => updateField('club_id', value)}
-                options={(clubs || []).map(club => ({
-                  label: club.nombre,
-                  value: club.id
-                }))}
+                options={clubs || []}
                 placeholder="Selecciona tu club favorito"
-                icon="🥊"
                 error={errors.club_id}
               />
             )}
@@ -448,6 +440,9 @@ export default function RegisterUserScreen() {
           <SubmitButton
             onPress={handleSubmit}
             isLoading={isSubmitting}
+            title="CREAR CUENTA"
+            icon="👤"
+            style={{ marginTop: -SPACING.md }}
           />
         </View>
       </ScrollView>
@@ -459,11 +454,11 @@ export default function RegisterUserScreen() {
         message={
           successData
             ? `¡Bienvenido ${successData.nombre}!\n\n` +
-              `Tu cuenta ha sido creada exitosamente.\n\n` +
-              `📧 Email: ${successData.email}\n` +
-              `🔑 Tu contraseña ha sido guardada de forma segura\n\n` +
-              `Ya puedes comprar entradas y disfrutar de los eventos de boxeo.\n\n` +
-              `¡Te esperamos en El Jab Dorado!`
+            `Tu cuenta ha sido creada exitosamente.\n\n` +
+            `📧 Email: ${successData.email}\n` +
+            `🔑 Tu contraseña ha sido guardada de forma segura\n\n` +
+            `Ya puedes comprar entradas y disfrutar de los eventos de boxeo.\n\n` +
+            `¡Te esperamos en El Jab Dorado!`
             : ''
         }
         buttonText="Ir al Inicio"
@@ -482,7 +477,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SPACING.xxl,
+    paddingBottom: 130,
   },
   header: {
     padding: SPACING.xl,
@@ -556,6 +551,6 @@ const styles = StyleSheet.create({
   removePhotoText: {
     fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.error,
-    fontWeight: TYPOGRAPHY.fontWeight.semiBold,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
 });

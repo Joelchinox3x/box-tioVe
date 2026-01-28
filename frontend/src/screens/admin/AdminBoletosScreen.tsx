@@ -14,10 +14,12 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import boletosService from '../../services/boletosService';
 import { BoletoVendido, TipoBoleto, ReporteBoletos } from '../../types';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants/theme';
+import { createShadow } from '../../utils/shadows';
 
 // Estilos de fuentes basados en TYPOGRAPHY
 const FONTS = {
@@ -490,20 +492,27 @@ function TiposBoletosTab() {
     setModalVisible(true);
   };
 
-  const handleDesactivar = async (id: number) => {
+  const handleToggleActivo = async (id: number, isActivo: boolean) => {
+    const accion = isActivo ? 'desactivar' : 'activar';
     Alert.alert(
-      'Desactivar tipo de boleto',
-      '¿Estás seguro de desactivar este tipo de boleto?',
+      `${accion.charAt(0).toUpperCase() + accion.slice(1)} tipo de boleto`,
+      `¿Estás seguro de ${accion} este tipo de boleto?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Desactivar',
-          style: 'destructive',
+          text: accion.charAt(0).toUpperCase() + accion.slice(1),
+          style: isActivo ? 'destructive' : 'default',
           onPress: async () => {
             try {
-              const response = await boletosService.desactivarTipoBoleto(id);
+              let response;
+              if (isActivo) {
+                response = await boletosService.desactivarTipoBoleto(id);
+              } else {
+                response = await boletosService.activarTipoBoleto(id);
+              }
+
               if (response.success) {
-                Alert.alert('Éxito', 'Tipo de boleto desactivado');
+                Alert.alert('Éxito', `Tipo de boleto ${accion}do`);
                 loadTipos();
               }
             } catch (error: any) {
@@ -527,39 +536,96 @@ function TiposBoletosTab() {
     <View style={styles.content}>
       <ScrollView>
         <TouchableOpacity style={styles.createButton} onPress={handleCrear}>
-          <Ionicons name="add-circle" size={24} color="#fff" />
-          <Text style={styles.createButtonText}>Crear Tipo de Boleto</Text>
+          <LinearGradient
+            colors={['#FFFFFF', '#E0E0E0']}
+            style={styles.createButtonGradient}
+          >
+            <Ionicons name="add-circle" size={22} color="#CC0000" />
+            <Text style={styles.createButtonText}>CREAR TIPO DE BOLETO</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         {tipos.map((tipo) => (
-          <View key={tipo.id} style={styles.tipoManageCard}>
+          <View key={tipo.id} style={[
+            styles.tipoManageCard,
+            !tipo.activo && styles.tipoManageCardInactive
+          ]}>
+            {/* Barra de color lateral */}
             <View style={[styles.tipoColorBar, { backgroundColor: tipo.color_hex }]} />
-            <View style={styles.tipoManageContent}>
-              <Text style={styles.tipoManageNombre}>{tipo.nombre}</Text>
-              <Text style={styles.tipoManagePrecio}>S/ {tipo.precio.toFixed(2)}</Text>
-              <Text style={styles.tipoManageStock}>
-                {tipo.cantidad_disponible} / {tipo.cantidad_total} disponibles
-              </Text>
-              {tipo.descripcion && (
-                <Text style={styles.tipoManageDesc}>{tipo.descripcion}</Text>
-              )}
 
-              <View style={styles.tipoManageActions}>
-                <TouchableOpacity
-                  style={styles.tipoEditButton}
-                  onPress={() => handleEditar(tipo)}
-                >
-                  <Ionicons name="create-outline" size={18} color={COLORS.primary} />
-                  <Text style={styles.tipoEditText}>Editar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.tipoDeleteButton}
-                  onPress={() => handleDesactivar(tipo.id)}
-                >
-                  <Ionicons name="trash-outline" size={18} color={COLORS.error} />
-                  <Text style={styles.tipoDeleteText}>Desactivar</Text>
-                </TouchableOpacity>
+            {/* Contenido principal */}
+            <View style={styles.tipoManageContent}>
+              {/* Header con nombre y acciones */}
+              <View style={styles.tipoManageHeader}>
+                <View style={styles.tipoManageHeaderLeft}>
+                  <Ionicons name="ticket" size={24} color={tipo.color_hex} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tipoManageNombre}>{tipo.nombre}</Text>
+                    <Text style={styles.tipoManagePrecio}>S/ {tipo.precio.toFixed(2)}</Text>
+                  </View>
+                </View>
+
+                {/* Botones de acción rápida */}
+                <View style={styles.quickActions}>
+                  {!tipo.activo && (
+                    <View style={styles.inactiveBadgeSmall}>
+                      <Text style={styles.inactiveBadgeTextSmall}>OFF</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => handleEditar(tipo)}
+                  >
+                    <View style={styles.iconButtonCircle}>
+                      <Ionicons name="create-outline" size={20} color={COLORS.primary} />
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => handleToggleActivo(tipo.id, tipo.activo)}
+                  >
+                    <View style={[
+                      styles.iconButtonCircle,
+                      tipo.activo ? styles.iconButtonActive : styles.iconButtonInactive
+                    ]}>
+                      <Ionicons
+                        name={tipo.activo ? "power" : "power-outline"}
+                        size={20}
+                        color={tipo.activo ? COLORS.success : COLORS.error}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              {/* Info de stock */}
+              <View style={styles.tipoStockContainer}>
+                <View style={styles.tipoStockInfo}>
+                  <Ionicons name="people" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.tipoManageStock}>
+                    {tipo.cantidad_disponible} / {tipo.cantidad_total} disponibles
+                  </Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      {
+                        width: `${(tipo.cantidad_vendida / tipo.cantidad_total) * 100}%`,
+                        backgroundColor: tipo.color_hex
+                      }
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* Descripción */}
+              {tipo.descripcion && (
+                <View style={styles.tipoDescContainer}>
+                  <Ionicons name="information-circle-outline" size={16} color={COLORS.text.tertiary} />
+                  <Text style={styles.tipoManageDesc}>{tipo.descripcion}</Text>
+                </View>
+              )}
             </View>
           </View>
         ))}
@@ -595,7 +661,7 @@ function TipoBoletoModal({ visible, tipo, onClose, onSuccess }: TipoBoletoModalP
     nombre: '',
     precio: '',
     cantidad_total: '',
-    color_hex: '#e74c3c', // Changed from Yellow to Primary Red
+    color_hex: '#e74c3c',
     descripcion: '',
     orden: '0',
   });
@@ -604,19 +670,19 @@ function TipoBoletoModal({ visible, tipo, onClose, onSuccess }: TipoBoletoModalP
   useEffect(() => {
     if (tipo) {
       setFormData({
-        nombre: tipo.nombre,
-        precio: tipo.precio.toString(),
-        cantidad_total: tipo.cantidad_total.toString(),
-        color_hex: tipo.color_hex,
+        nombre: tipo.nombre || '',
+        precio: tipo.precio?.toString() || '',
+        cantidad_total: tipo.cantidad_total?.toString() || '',
+        color_hex: tipo.color_hex || '#e74c3c',
         descripcion: tipo.descripcion || '',
-        orden: tipo.orden.toString(),
+        orden: tipo.orden?.toString() || '0',
       });
     } else {
       setFormData({
         nombre: '',
         precio: '',
         cantidad_total: '',
-        color_hex: '#e74c3c', // Changed from Yellow to Primary Red
+        color_hex: '#e74c3c',
         descripcion: '',
         orden: '0',
       });
@@ -659,76 +725,172 @@ function TipoBoletoModal({ visible, tipo, onClose, onSuccess }: TipoBoletoModalP
     }
   };
 
+  const colores = [
+    { name: 'Rojo', hex: '#e74c3c' },
+    { name: 'Azul', hex: '#3498db' },
+    { name: 'Verde', hex: '#2ecc71' },
+    { name: 'Dorado', hex: '#f39c12' },
+    { name: 'Morado', hex: '#9b59b6' },
+    { name: 'Turquesa', hex: '#1abc9c' },
+  ];
+
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
+          {/* Header con título */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {tipo ? 'Editar Tipo de Boleto' : 'Crear Tipo de Boleto'}
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={28} color={COLORS.text.primary} />
+            <View style={styles.modalHeaderTitleContainer}>
+              <Ionicons
+                name={tipo ? "create" : "add-circle"}
+                size={24}
+                color={COLORS.primary}
+              />
+              <Text style={styles.modalTitle}>
+                {tipo ? 'Editar Tipo de Boleto' : 'Crear Tipo de Boleto'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalForm}>
-            <FormField
-              label="Nombre *"
-              value={formData.nombre}
-              onChangeText={(text) => setFormData({ ...formData, nombre: text })}
-              placeholder="General, VIP, Premium..."
-            />
-            <FormField
-              label="Precio (S/) *"
-              value={formData.precio}
-              onChangeText={(text) => setFormData({ ...formData, precio: text })}
-              placeholder="50.00"
-              keyboardType="decimal-pad"
-            />
-            <FormField
-              label="Cantidad Total *"
-              value={formData.cantidad_total}
-              onChangeText={(text) => setFormData({ ...formData, cantidad_total: text })}
-              placeholder="100"
-              keyboardType="number-pad"
-            />
-            <FormField
-              label="Color (HEX)"
-              value={formData.color_hex}
-              onChangeText={(text) => setFormData({ ...formData, color_hex: text })}
-              placeholder="#FFD700"
-            />
-            <FormField
-              label="Descripción"
-              value={formData.descripcion}
-              onChangeText={(text) => setFormData({ ...formData, descripcion: text })}
-              placeholder="Descripción opcional..."
-              multiline
-            />
-            <FormField
-              label="Orden"
-              value={formData.orden}
-              onChangeText={(text) => setFormData({ ...formData, orden: text })}
-              placeholder="0"
-              keyboardType="number-pad"
-            />
+          {/* Formulario */}
+          <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
+            {/* Nombre */}
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Nombre del Boleto *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formData.nombre}
+                onChangeText={(text) => setFormData({ ...formData, nombre: text })}
+                placeholder="Ej: General, VIP, Premium"
+                placeholderTextColor={COLORS.text.tertiary}
+              />
+            </View>
+
+            {/* Precio y Cantidad en fila */}
+            <View style={styles.formRow}>
+              <View style={[styles.formField, { flex: 1 }]}>
+                <Text style={styles.formLabel}>Precio (S/) *</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formData.precio}
+                  onChangeText={(text) => setFormData({ ...formData, precio: text })}
+                  placeholder="50.00"
+                  placeholderTextColor={COLORS.text.tertiary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={[styles.formField, { flex: 1 }]}>
+                <Text style={styles.formLabel}>Cantidad *</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formData.cantidad_total}
+                  onChangeText={(text) => setFormData({ ...formData, cantidad_total: text })}
+                  placeholder="100"
+                  placeholderTextColor={COLORS.text.tertiary}
+                  keyboardType="number-pad"
+                />
+              </View>
+            </View>
+
+            {/* Selector de Color */}
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Color del Boleto</Text>
+              <View style={styles.colorPickerContainer}>
+                {colores.map((color) => (
+                  <TouchableOpacity
+                    key={color.hex}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: color.hex },
+                      formData.color_hex === color.hex && styles.colorOptionSelected,
+                    ]}
+                    onPress={() => setFormData({ ...formData, color_hex: color.hex })}
+                  >
+                    {formData.color_hex === color.hex && (
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.formInput, { marginTop: SPACING.sm }]}
+                value={formData.color_hex}
+                onChangeText={(text) => setFormData({ ...formData, color_hex: text })}
+                placeholder="#e74c3c"
+                placeholderTextColor={COLORS.text.tertiary}
+              />
+            </View>
+
+            {/* Descripción */}
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Descripción (Opcional)</Text>
+              <TextInput
+                style={[styles.formInput, styles.formInputMultiline]}
+                value={formData.descripcion}
+                onChangeText={(text) => setFormData({ ...formData, descripcion: text })}
+                placeholder="Incluye acceso general, sin asiento asignado..."
+                placeholderTextColor={COLORS.text.tertiary}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            {/* Orden */}
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Orden de Visualización</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formData.orden}
+                onChangeText={(text) => setFormData({ ...formData, orden: text })}
+                placeholder="0"
+                placeholderTextColor={COLORS.text.tertiary}
+                keyboardType="number-pad"
+              />
+              <Text style={styles.formHint}>Los boletos se ordenarán de menor a mayor</Text>
+            </View>
           </ScrollView>
 
+          {/* Botones de acción */}
           <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
-              <Text style={styles.modalCancelText}>Cancelar</Text>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={onClose}
+              disabled={saving}
+            >
+              <LinearGradient
+                colors={['#333333', '#1a1a1a']}
+                style={styles.modalButtonGradient}
+              >
+                <Ionicons name="close-circle" size={18} color={COLORS.text.secondary} />
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalSaveButton, saving && styles.modalSaveButtonDisabled]}
               onPress={handleSave}
               disabled={saving}
             >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.modalSaveText}>Guardar</Text>
-              )}
+              <LinearGradient
+                colors={['#FFFFFF', '#E0E0E0']}
+                style={styles.modalButtonGradient}
+              >
+                {saving ? (
+                  <>
+                    <ActivityIndicator color="#CC0000" size="small" />
+                    <Text style={styles.modalSaveText}>GUARDANDO...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={18} color="#CC0000" />
+                    <Text style={styles.modalSaveText}>
+                      {tipo ? 'ACTUALIZAR' : 'CREAR BOLETO'}
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
@@ -784,31 +946,6 @@ function EstadoChip({ label, count, color }: EstadoChipProps) {
   );
 }
 
-interface FormFieldProps {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder?: string;
-  keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad' | 'number-pad' | 'decimal-pad';
-  multiline?: boolean;
-}
-
-function FormField({ label, value, onChangeText, placeholder, keyboardType, multiline }: FormFieldProps) {
-  return (
-    <View style={styles.formField}>
-      <Text style={styles.formLabel}>{label}</Text>
-      <TextInput
-        style={[styles.formInput, multiline && styles.formInputMultiline]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        numberOfLines={multiline ? 3 : 1}
-      />
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
@@ -1125,167 +1262,270 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   createButton: {
+    marginBottom: SPACING.md,
+  },
+  createButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.primary,
-    padding: SPACING.md,
-    borderRadius: 8,
-    marginBottom: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.full,
   },
   createButtonText: {
-    ...FONTS.body,
-    color: '#fff',
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: '#CC0000',
   },
   tipoManageCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     marginBottom: SPACING.md,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: COLORS.border.primary,
     flexDirection: 'row',
+    ...createShadow('#000', 0, 2, 0.3, 4, 3),
+  },
+  tipoManageCardInactive: {
+    opacity: 0.5,
+    borderColor: COLORS.border.light,
   },
   tipoColorBar: {
-    width: 6,
+    width: 8,
   },
   tipoManageContent: {
     flex: 1,
-    padding: SPACING.md,
+    padding: SPACING.lg,
+  },
+  tipoManageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  tipoManageHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    flex: 1,
   },
   tipoManageNombre: {
-    ...FONTS.h3,
-    marginBottom: SPACING.xs,
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
+    marginBottom: 2,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  inactiveBadgeSmall: {
+    backgroundColor: COLORS.error,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  inactiveBadgeTextSmall: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    letterSpacing: 0.5,
+  },
+  iconButton: {
+    padding: 2,
+  },
+  iconButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 2,
+    borderColor: COLORS.border.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconButtonActive: {
+    borderColor: COLORS.success,
+    backgroundColor: COLORS.success + '15',
+  },
+  iconButtonInactive: {
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.error + '15',
   },
   tipoManagePrecio: {
-    ...FONTS.body,
+    fontSize: TYPOGRAPHY.fontSize.md,
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+  },
+  tipoStockContainer: {
+    marginBottom: SPACING.md,
+  },
+  tipoStockInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
   tipoManageStock: {
-    ...FONTS.bodySmall,
+    fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.text.secondary,
-    marginTop: SPACING.xs,
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: COLORS.border.primary,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  tipoDescContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border.primary,
   },
   tipoManageDesc: {
-    ...FONTS.bodySmall,
-    marginTop: SPACING.xs,
-    fontStyle: 'italic',
-  },
-  tipoManageActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
-  },
-  tipoEditButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
     flex: 1,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.primary + '10',
-    borderRadius: 8,
-    justifyContent: 'center',
-  },
-  tipoEditText: {
-    ...FONTS.bodySmall,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  tipoDeleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    flex: 1,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.error + '10',
-    borderRadius: 8,
-    justifyContent: 'center',
-  },
-  tipoDeleteText: {
-    ...FONTS.bodySmall,
-    color: COLORS.error,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
+    maxHeight: '95%',
+    borderWidth: 1,
+    borderColor: COLORS.border.primary,
+    ...createShadow(COLORS.primary, 0, -4, 0.3, 8, 8),
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.primary,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+    backgroundColor: COLORS.surface,
+  },
+  modalHeaderTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  closeButton: {
+    padding: SPACING.xs,
   },
   modalTitle: {
-    ...FONTS.h2,
+    fontSize: TYPOGRAPHY.fontSize.xl,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
   },
   modalForm: {
     padding: SPACING.lg,
+    backgroundColor: COLORS.background,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
   },
   formField: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   formLabel: {
-    ...FONTS.body,
-    fontWeight: '600',
-    marginBottom: SPACING.xs,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.sm,
   },
   formInput: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
     padding: SPACING.md,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border.primary,
-    ...FONTS.body,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
   },
   formInputMultiline: {
-    minHeight: 80,
+    minHeight: 90,
     textAlignVertical: 'top',
+    paddingTop: SPACING.md,
+  },
+  formHint: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.tertiary,
+    marginTop: SPACING.xs,
+    fontStyle: 'italic',
+  },
+  colorPickerContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  colorOption: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.border.primary,
+  },
+  colorOptionSelected: {
+    borderColor: COLORS.primary,
+    borderWidth: 4,
+    ...createShadow(COLORS.primary, 0, 0, 0.6, 8, 8),
   },
   modalActions: {
     flexDirection: 'row',
     gap: SPACING.md,
     padding: SPACING.lg,
-    borderTopWidth: 1,
+    borderTopWidth: 2,
     borderTopColor: COLORS.border.primary,
+    backgroundColor: COLORS.surface,
   },
   modalCancelButton: {
     flex: 1,
-    padding: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border.primary,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    ...FONTS.body,
-    fontWeight: '600',
   },
   modalSaveButton: {
-    flex: 1,
-    padding: SPACING.md,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
+    flex: 1.5,
+  },
+  modalButtonGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.full,
   },
   modalSaveButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    color: COLORS.text.secondary,
   },
   modalSaveText: {
-    ...FONTS.body,
-    color: '#fff',
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: '#CC0000',
   },
 });

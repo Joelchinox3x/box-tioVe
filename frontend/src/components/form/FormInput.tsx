@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TextInput, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 
 interface FormInputProps {
@@ -15,6 +16,10 @@ interface FormInputProps {
   onBlur?: () => void;
   icon?: string;
   error?: string;
+  isValid?: boolean;
+  successMessage?: string;
+  maxLength?: number;
+  onLayout?: (event: any) => void;
 }
 
 export const FormInput: React.FC<FormInputProps> = ({
@@ -30,18 +35,26 @@ export const FormInput: React.FC<FormInputProps> = ({
   onBlur,
   icon,
   error,
+  isValid,
+  successMessage,
+  maxLength,
+  onLayout,
 }) => {
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={onLayout}>
       <Text style={styles.label}>{label}</Text>
       <View style={[
         styles.wrapper,
         focused && styles.wrapperFocused,
-        value && styles.wrapperFilled,
-        error && styles.wrapperError,
+        !!value && styles.wrapperFilled,
+        !!error && styles.wrapperError,
       ]}>
         <TextInput
-          style={[styles.input, multiline && styles.inputMultiline]}
+          style={[
+            styles.input,
+            multiline && styles.inputMultiline,
+            (isValid || !!icon) && { paddingRight: 45 }
+          ]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -52,15 +65,29 @@ export const FormInput: React.FC<FormInputProps> = ({
           numberOfLines={multiline ? 3 : 1}
           onFocus={onFocus}
           onBlur={onBlur}
+          maxLength={maxLength}
         />
-        {icon && <Text style={styles.icon}>{icon}</Text>}
+        {(isValid || icon) && (
+          <View style={styles.iconOverlay}>
+            {isValid ? (
+              <Ionicons name="checkmark-circle" size={22} color="#2563EB" />
+            ) : (
+              icon && <Ionicons name={icon as any} size={20} color={COLORS.text.tertiary} />
+            )}
+          </View>
+        )}
       </View>
-      {error && (
+      {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorText}>{error}</Text>
         </View>
-      )}
+      ) : successMessage && isValid ? (
+        <View style={styles.successContainer}>
+          <Ionicons name="checkmark-circle" size={14} color="#2563EB" style={styles.successIcon} />
+          <Text style={styles.successText}>{successMessage}</Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -90,7 +117,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     ...Platform.select({
       ios: SHADOWS.lg,
-      android: { elevation: 6 },
+      android: { ...SHADOWS.lg, elevation: 6 },
     }),
   },
   wrapperFilled: {
@@ -113,7 +140,13 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 20,
-    marginRight: SPACING.md,
+  },
+  iconOverlay: {
+    position: 'absolute',
+    right: SPACING.md,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   errorContainer: {
     flexDirection: 'row',
@@ -129,5 +162,20 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.error,
     flex: 1,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
+  },
+  successIcon: {
+    marginRight: SPACING.xs,
+  },
+  successText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: '#2563EB',
+    flex: 1,
+    fontWeight: '500',
   },
 });

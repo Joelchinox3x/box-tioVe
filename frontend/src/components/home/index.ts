@@ -5,3 +5,4 @@ export { FightCard } from './FightCard';
 export { FighterCarousel } from './FighterCarousel';
 export { ScheduledFights } from './ScheduledFights';
 export { GeneralTicketBanner } from './GeneralTicketBanner';
+export { BannerCarousel } from './BannerCarousel';

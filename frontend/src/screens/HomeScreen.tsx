@@ -19,7 +19,6 @@ import {
   FighterCarousel,
   ScheduledFights,
   GeneralTicketBanner,
-  FighterCTABanner,
   BannerCarousel,
   type Category,
 } from '../components/home';
@@ -204,10 +203,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           subtitle="Sábado 22 de Febrero - Santa Clara"
           buttonText="COMPRAR S/. 10"
         />
-
-        {/* Banner de Registro de Peleador - MAS VISIBLE 
-        <FighterCTABanner onPress={() => navigation.navigate('FighterForm')} /> */}
-
         <View style={styles.actionsSection}>
           <TouchableOpacity
             style={styles.actionButton}

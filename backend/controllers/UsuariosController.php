@@ -222,4 +222,78 @@ class UsuariosController {
             ];
         }
     }
+
+    /**
+     * Obtener usuario por ID
+     */
+    public function getById($id) {
+        try {
+            // Buscar usuario por ID
+            $query = "SELECT u.*, t.nombre as tipo_nombre
+                FROM usuarios u
+                JOIN tipos_usuario t ON u.tipo_id = t.id
+                WHERE u.id = :id";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$usuario) {
+                http_response_code(404);
+                return [
+                    "success" => false,
+                    "message" => "Usuario no encontrado"
+                ];
+            }
+
+            // Remover password_hash
+            unset($usuario['password_hash']);
+
+            // Si es peleador, obtener datos adicionales
+            if ($usuario['tipo_id'] == 2) {
+                $queryPeleador = "SELECT * FROM peleadores WHERE usuario_id = :usuario_id";
+                $stmtPeleador = $this->db->prepare($queryPeleador);
+                $stmtPeleador->bindParam(':usuario_id', $usuario['id']);
+                $stmtPeleador->execute();
+                $peleador = $stmtPeleador->fetch(PDO::FETCH_ASSOC);
+                $usuario['peleador'] = $peleador;
+            }
+
+            // Si es Club (tipo 1 o 3, depende implementacion, aqui lo dejamos simple)
+            // Futuro: agregar info club si es admin de club
+
+            return [
+                "success" => true,
+                "usuario" => $usuario
+            ];
+
+        } catch (PDOException $e) {
+            error_log("Error obteniendo usuario $id: " . $e->getMessage());
+            http_response_code(500);
+            return [
+                "success" => false,
+                "message" => "Error al obtener perfil"
+            ];
+        }
+    }
+
+    /**
+     * Verificar si un email ya existe
+     */
+    public function verificarEmail($email) {
+        $query = "SELECT COUNT(*) as count FROM usuarios WHERE email = :email";
+        $stmt = $this->db->prepare($query);
+        $stmt->bindParam(':email', $email);
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return [
+            "success" => true,
+            "disponible" => $result['count'] == 0,
+            "mensaje" => $result['count'] == 0
+                ? "Email disponible"
+                : "Este email ya está registrado"
+        ];
+    }
 }

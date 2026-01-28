@@ -10,12 +10,19 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../constants/theme';
+import { createShadow } from '../utils/shadows';
+import { ScreenHeader } from '../components/common/ScreenHeader';
+import { clubService, Club } from '../services/clubService';
+import api from '../services/api';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 const API_BASE_URL = 'https://boxtiove.com';
 
@@ -47,18 +54,77 @@ interface Usuario {
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const [user, setUser] = useState<Usuario | null>(null);
+  const [club, setClub] = useState<Club | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingExtra, setLoadingExtra] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const loadUserData = async () => {
     try {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
-        setUser(JSON.parse(userData));
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser); // Show cached data first for speed
+
+        // 🚀 FETCH FRESH DATA
+        try {
+          await fetchFreshData(parsedUser.id);
+        } catch (fetchErr) {
+          console.log('⚠️ Could not fetch fresh data, using cache only');
+        }
+
+        // Cargar datos extra si tiene club (usando el ID posiblemente actualizado)
+        if (parsedUser.club_id) {
+          loadClubData(parsedUser.club_id);
+        }
       }
     } catch (error) {
       console.error('Error cargando datos del usuario:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFreshData = async (userId: number) => {
+    try {
+      const response = await api.get(`/usuarios/${userId}`);
+
+      if (response.data && response.data.success) {
+        const freshUser = response.data.usuario;
+        console.log('✅ Datos actualizados recibidos:', freshUser);
+        setUser(freshUser);
+
+        // Update Cache
+        await AsyncStorage.setItem('user', JSON.stringify(freshUser));
+
+        if (freshUser.club_id) {
+          loadClubData(freshUser.club_id);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching fresh data:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (user?.id) {
+      await fetchFreshData(user.id);
+    }
+    setRefreshing(false);
+  };
+
+  const loadClubData = async (clubId: number) => {
+    try {
+      setLoadingExtra(true);
+      const clubData = await clubService.getById(clubId);
+      setClub(clubData);
+    } catch (error) {
+      console.error('Error cargando datos del club:', error);
+    } finally {
+      setLoadingExtra(false);
     }
   };
 
@@ -69,35 +135,24 @@ export default function ProfileScreen() {
     }, [])
   );
 
-    const handleLogout = async () => {
+  const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro que deseas salir de tu cuenta?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Salir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('user');
-              await AsyncStorage.removeItem('token');
-              setUser(null);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('Sesión Cerrada', 'Has cerrado sesión exitosamente');
-            } catch (error) {
-              console.error('Error al cerrar sesión:', error);
-              Alert.alert('Error', 'No se pudo cerrar la sesión');
-            }
-          },
-        },
-      ]
-    );
+    setLogoutModalVisible(true);
   };
+
+  const confirmLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('token');
+      setUser(null);
+      setLogoutModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      Alert.alert('Error', 'No se pudo cerrar la sesión');
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -151,12 +206,25 @@ export default function ProfileScreen() {
   // Usuario autenticado
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ScreenHeader
+        title="MI PERFIL"
+        showBackButton={true}
+        onBackPress={() => navigation.navigate('Home' as never)}
+      />
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary} // iOS
+            colors={[COLORS.primary]} // Android
+          />
+        }
       >
         {/* Header con avatar */}
         <View style={styles.header}>
@@ -288,6 +356,76 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Sección: Inscripción al Evento (Solo para peleadores) */}
+        {user.tipo_id === 2 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📅 MI INSCRIPCIÓN AL EVENTO</Text>
+            <View style={styles.enrollmentCard}>
+              <View style={styles.enrollmentHeader}>
+                <Ionicons name="trophy" size={24} color={COLORS.primary} />
+                <Text style={styles.enrollmentTitle}>Boxeo de Gala 2026</Text>
+              </View>
+
+              <View style={styles.enrollmentStatusRow}>
+                <View style={styles.statusChip}>
+                  <Text style={styles.statusChipText}>ESTADO: PAGADO</Text>
+                </View>
+                <Text style={styles.paymentMethod}>Yape • S/ 20.00</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.detailsButton}
+                onPress={() => Alert.alert('Detalle', 'Tu inscripción ha sido confirmada. ¡Prepárate para la pelea!')}
+              >
+                <Text style={styles.detailsButtonText}>Ver comprobante</Text>
+                <Ionicons name="document-text-outline" size={16} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Sección: Mi Club */}
+        {(user.club_id || club) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🏛️ MI CLUB / GIMNASIO</Text>
+            <View style={styles.clubCard}>
+              <View style={styles.clubHeader}>
+                <View style={styles.clubIconContainer}>
+                  <Ionicons name="business" size={30} color={COLORS.primary} />
+                </View>
+                <View style={styles.clubHeaderText}>
+                  <Text style={styles.clubName}>{club?.nombre || 'Mi Club'}</Text>
+                  <Text style={styles.clubStatus}>Miembro Activo</Text>
+                </View>
+              </View>
+
+              {club?.direccion && (
+                <View style={styles.clubDetailRow}>
+                  <Ionicons name="location-outline" size={18} color={COLORS.text.secondary} />
+                  <Text style={styles.clubDetailText}>{club.direccion}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.clubButton}
+                onPress={() => Alert.alert('Próximamente', 'Podrás ver más detalles del club muy pronto.')}
+              >
+                <Text style={styles.clubButtonText}>VER PÁGINA DEL CLUB</Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Botón de Editar Perfil */}
+        <TouchableOpacity
+          style={styles.editProfileButton}
+          onPress={() => Alert.alert('Editar Perfil', 'Esta función estará disponible en la siguiente actualización.')}
+        >
+          <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.editProfileButtonText}>EDITAR MI INFORMACIÓN</Text>
+        </TouchableOpacity>
+
         {/* Botón de Panel Admin (solo para administradores) */}
         {user.tipo_id === 1 && (
           <TouchableOpacity
@@ -308,6 +446,17 @@ export default function ProfileScreen() {
           <Text style={styles.logoutButtonText}>CERRAR SESIÓN</Text>
         </TouchableOpacity>
 
+        <ConfirmModal
+          visible={logoutModalVisible}
+          title="Cerrar Sesión"
+          message="¿Estás seguro que deseas salir de tu cuenta?"
+          confirmText="Sí, salir"
+          cancelText="Cancelar"
+          confirmColor={COLORS.error}
+          onConfirm={confirmLogout}
+          onCancel={() => setLogoutModalVisible(false)}
+        />
+
         <View style={styles.bottomSpace} />
       </ScrollView>
     </SafeAreaView>
@@ -323,7 +472,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SPACING.xxl * 2,
+    paddingBottom: SPACING.xxl,
   },
   loadingContainer: {
     flex: 1,
@@ -463,7 +612,59 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: TYPOGRAPHY.fontSize.md,
     color: COLORS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.semiBold,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  enrollmentCard: {
+    backgroundColor: COLORS.primary + '05',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    ...SHADOWS.sm,
+    gap: SPACING.md,
+  },
+  enrollmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  enrollmentTitle: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
+  },
+  enrollmentStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusChip: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  statusChipText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.inverse,
+  },
+  paymentMethod: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    alignSelf: 'flex-start',
+    marginTop: SPACING.xs,
+  },
+  detailsButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+    textDecorationLine: 'underline',
   },
   fighterCard: {
     backgroundColor: COLORS.surface,
@@ -546,8 +747,84 @@ const styles = StyleSheet.create({
   },
   recordLabel: {
     fontSize: TYPOGRAPHY.fontSize.xs,
-    fontWeight: TYPOGRAPHY.fontWeight.semiBold,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     textTransform: 'uppercase',
+  },
+  clubCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border.primary,
+    ...SHADOWS.sm,
+  },
+  clubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  clubIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.primary + '10',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clubHeaderText: {
+    flex: 1,
+  },
+  clubName: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
+  },
+  clubStatus: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.success,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  clubDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  clubDetailText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  clubButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border.primary,
+  },
+  clubButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.primary,
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    paddingVertical: SPACING.md,
+    marginHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    gap: SPACING.sm,
+    marginBottom: SPACING.xl,
+  },
+  editProfileButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.primary,
   },
   adminButton: {
     flexDirection: 'row',
@@ -560,14 +837,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginHorizontal: SPACING.lg,
     marginTop: SPACING.xl,
-    shadowColor: '#e74c3c',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...createShadow('#e74c3c', 0, 4, 0.3, 8, 8),
   },
   adminButtonText: {
     fontSize: TYPOGRAPHY.fontSize.md,
@@ -595,6 +865,6 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   bottomSpace: {
-    height: SPACING.xl,
+    height: 100, // Espacio extra para asegurar que nada se corte
   },
 });

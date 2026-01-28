@@ -1,19 +1,21 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants/theme';
 
 interface FormSectionProps {
   icon: string;
   title: string;
   children: React.ReactNode;
+  onLayout?: (event: any) => void;
 }
 
-export const FormSection: React.FC<FormSectionProps> = ({ icon, title, children }) => {
+export const FormSection: React.FC<FormSectionProps> = ({ icon, title, children, onLayout }) => {
   return (
-    <View style={styles.section}>
+    <View style={styles.section} onLayout={onLayout}>
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Text style={styles.icon}>{icon}</Text>
+          <Ionicons name={icon as any} size={24} color={COLORS.primary} />
         </View>
         <Text style={styles.title}>{title}</Text>
       </View>

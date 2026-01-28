@@ -7,12 +7,18 @@ interface SubmitButtonProps {
   onPress: () => void;
   isLoading: boolean;
   disabled?: boolean;
+  title?: string;
+  icon?: string;
+  style?: any;
 }
 
 export const SubmitButton: React.FC<SubmitButtonProps> = ({
   onPress,
   isLoading,
-  disabled = false
+  disabled = false,
+  title = 'INSCRIBIRSE AHORA',
+  icon = '🥊',
+  style,
 }) => {
   const handlePress = () => {
     console.log('⚡ Button pressed in SubmitButton!');
@@ -32,11 +38,13 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
     <ButtonComponent
       onPress={handlePress}
       disabled={isLoading || disabled}
-      style={({ pressed }: any) => [
-        Platform.OS === 'web' && {
+      style={({ pressed }) => [
+        styles.container,
+        style,
+        Platform.OS === 'web' && ({
           opacity: pressed ? 0.8 : 1,
-          cursor: isLoading || disabled ? 'not-allowed' : 'pointer',
-        }
+          cursor: (isLoading || disabled ? 'not-allowed' : 'pointer') as any,
+        } as any)
       ]}
     >
       <LinearGradient
@@ -55,8 +63,8 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
           </>
         ) : (
           <>
-            <Text style={styles.text}>INSCRIBIRSE AHORA</Text>
-            <Text style={styles.icon}>🥊</Text>
+            <Text style={styles.text}>{title}</Text>
+            <Text style={styles.icon}>{icon}</Text>
           </>
         )}
       </LinearGradient>
@@ -65,8 +73,10 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
 };
 
 const styles = StyleSheet.create({
-  button: {
+  container: {
     marginTop: SPACING.xl,
+  },
+  button: {
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.lg,
     flexDirection: 'row',
@@ -75,7 +85,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     ...Platform.select({
       ios: SHADOWS.lg,
-      android: { elevation: 8 },
+      android: { ...SHADOWS.lg, elevation: 8 },
       web: {
         boxShadow: '0 4px 8px rgba(255, 215, 0, 0.3)',
         userSelect: 'none' as any,

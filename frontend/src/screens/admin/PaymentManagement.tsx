@@ -28,8 +28,9 @@ interface Inscripcion {
   peleador_telefono: string;
   peleador_apodo: string;
   peleador_dni: string;
-  evento_titulo: string;
-  fecha_evento: string;
+  evento_nombre: string;
+  evento_fecha: string;
+  evento_hora: string;
   precio_evento: string;
   club_nombre: string | null;
 }
@@ -208,12 +209,12 @@ export default function PaymentManagement() {
               <View style={styles.cardBody}>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Evento:</Text>
-                  <Text style={styles.infoValue}>{inscripcion.evento_titulo}</Text>
+                  <Text style={styles.infoValue}>{inscripcion.evento_nombre}</Text>
                 </View>
 
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Fecha evento:</Text>
-                  <Text style={styles.infoValue}>{formatDate(inscripcion.fecha_evento)}</Text>
+                  <Text style={styles.infoValue}>{formatDate(inscripcion.evento_fecha)} {inscripcion.evento_hora}</Text>
                 </View>
 
                 <View style={styles.infoRow}>
@@ -286,7 +287,7 @@ export default function PaymentManagement() {
             {selectedInscripcion && (
               <>
                 <Text style={styles.modalSubtitle}>
-                  {selectedInscripcion.peleador_nombre} - {selectedInscripcion.evento_titulo}
+                  {selectedInscripcion.peleador_nombre} - {selectedInscripcion.evento_nombre}
                 </Text>
 
                 <View style={styles.formGroup}>

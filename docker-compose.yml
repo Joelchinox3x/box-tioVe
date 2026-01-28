@@ -18,6 +18,7 @@ services:
   backend:
     build: ./docker/php
     container_name: mi_php_backend
+    restart: always
     volumes:
       - ./backend:/var/www/html # Conecta tu carpeta local con el contenedor
     depends_on:
@@ -27,6 +28,7 @@ services:
   proforma-app:
     build: ./docker/php
     container_name: proforma-app
+    restart: always
     volumes:
       - ./proformaserver/proforma-app:/var/www/proforma-app
       - proforma_uploads:/var/www/proforma-app/uploads  # Volumen persistente para uploads
@@ -37,6 +39,7 @@ services:
   proformamvc:
     build: ./docker/php
     container_name: proformamvc
+    restart: always
     volumes:
       - ./proformaserver/proformamvc:/var/www/proformamvc
     
@@ -47,6 +50,7 @@ services:
   webserver:
     image: nginx:alpine
     container_name: mi_nginx
+    restart: always
     ports:
       - "80:80" # Tu API estará disponible en localhost:80
       - "443:443" # Puerto HTTPS

@@ -24,10 +24,7 @@ yarn-error.log*
 
 # Project specific
 backend/files/
-proformaserver/proformamvc/vendor/
-proformaserver/proforma-app/vendor/
-proformaserver/proformamvc/public/tmp/
-proformaserver/proformamvc/writable/
+proformaserver/
 frontend/build/
 frontend/dist/
 web-frontend/dist/
