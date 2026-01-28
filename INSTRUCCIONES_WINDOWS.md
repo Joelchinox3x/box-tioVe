@@ -10,6 +10,17 @@ Asegúrate de tener instalados:
 - **XAMPP** (Opcional, si necesitas MySQL localmente y no usas Docker)
 
 ## 2. Clonar el repositorio
+
+### Opción A: Usando GitHub Desktop (Más fácil)
+1. Abre la aplicación **GitHub Desktop**.
+2. Si es tu primera vez, inicia sesión con tu cuenta de GitHub.
+3. Ve al menú **File** > **Clone repository...**
+4. Selecciona la pestaña **URL**.
+5. Pega este enlace: `https://github.com/Joelchinox3x/box-tioVe.git`
+6. Elige la carpeta donde guardarlo en "Local path" y dale clic a **Clone**.
+7. Una vez clonado, dale clic a **"Open in Visual Studio Code"**.
+
+### Opción B: Usando Terminal
 1. Abre una terminal (PowerShell, CMD o Git Bash) en la carpeta donde quieras guardar el proyecto.
 2. Ejecuta el siguiente comando:
    ```bash
