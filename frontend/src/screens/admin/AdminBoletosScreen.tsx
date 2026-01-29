@@ -187,6 +187,7 @@ function PendientesTab({ loading, refreshing, onRefresh }: PendientesTabProps) {
     <ScrollView
       style={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingBottom: 100 }}
     >
       {pendientes.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -301,7 +302,7 @@ function ValidarQRTab() {
   };
 
   return (
-    <ScrollView style={styles.content}>
+    <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
       <View style={styles.qrContainer}>
         <Text style={styles.qrTitle}>Escanear código QR</Text>
         <Text style={styles.qrSubtitle}>
@@ -404,6 +405,7 @@ function ReportesTab({ loading, refreshing, onRefresh }: ReportesTabProps) {
     <ScrollView
       style={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingBottom: 100 }}
     >
       {reporte && (
         <>
@@ -534,7 +536,7 @@ function TiposBoletosTab() {
 
   return (
     <View style={styles.content}>
-      <ScrollView>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         <TouchableOpacity style={styles.createButton} onPress={handleCrear}>
           <LinearGradient
             colors={['#FFFFFF', '#E0E0E0']}

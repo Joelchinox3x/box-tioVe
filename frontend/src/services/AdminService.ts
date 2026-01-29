@@ -139,4 +139,42 @@ export class AdminService {
     });
     return response.data;
   }
+
+
+  /**
+   * Obtener los logos activos para todos los tipos (card, pdf, header)
+   */
+  static async getActiveLogos() {
+    const response = await api.get('/admin/branding/active');
+    return response.data;
+  }
+
+  /**
+   * Obtener el historial de logos (opcionalmente filtrado por tipo)
+   */
+  static async getLogosHistory(tipo?: string) {
+    const url = tipo ? `/admin/branding/logos?tipo=${tipo}` : '/admin/branding/logos';
+    const response = await api.get(url);
+    return response.data;
+  }
+
+  /**
+   * Subir un nuevo logo para un tipo específico
+   */
+  static async uploadLogo(formData: FormData) {
+    const response = await api.post('/admin/branding/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
+  /**
+   * Cambiar el logo activo desde el historial
+   */
+  static async setActiveLogo(logoId: number) {
+    const response = await api.post('/admin/branding/set-active', { id: logoId });
+    return response.data;
+  }
 }

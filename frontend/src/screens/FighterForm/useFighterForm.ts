@@ -15,6 +15,7 @@ import * as FileSystem from 'expo-file-system';
 import { FormData, FormErrors } from './types';
 import api from '../../services/api';
 import { generateDebugFighter } from '../../data/dummyFighters';
+import { AdminService } from '../../services/AdminService';
 
 export const useFighterForm = () => {
     const navigation = useNavigation();
@@ -78,6 +79,7 @@ export const useFighterForm = () => {
     const [bgOffsetX, setBgOffsetX] = useState(0);
     const [bgScale, setBgScale] = useState(1);
     const [bgFlipX, setBgFlipX] = useState(false);
+    const [bgRotation, setBgRotation] = useState(0);
     const [isRemovingBg, setIsRemovingBg] = useState(false);
     const [isLibReady, setIsLibReady] = useState(false);
 
@@ -86,10 +88,15 @@ export const useFighterForm = () => {
     const [borderTemplates, setBorderTemplates] = useState<any[]>([]);
     const [selectedBorder, setSelectedBorder] = useState<string | null>(null);
     const [selectedBackground, setSelectedBackground] = useState<string | null>(null);
+    const [stickerTemplates, setStickerTemplates] = useState<any[]>([]);
+    const [selectedStickers, setSelectedStickers] = useState<string[]>([]);
 
     // Banners
     const [banners, setBanners] = useState<any[]>([]);
     const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+    const [companyLogoUri, setCompanyLogoUri] = useState<string | null>(null);
+    const [adjustmentFocus, setAdjustmentFocus] = useState<'photo' | string>('photo');
+    const [stickerTransforms, setStickerTransforms] = useState<Record<string, { x: number, y: number, scale: number, rotation: number, flipX: boolean }>>({});
 
     // Audio
     const punch3Player = useAudioPlayer(require('../../../assets/sounds/punch-03.mp3'));
@@ -110,6 +117,7 @@ export const useFighterForm = () => {
         checkAuthStatus();
         loadBanners();
         loadTemplates(); // Load templates too
+        loadBranding();
     }, []);
 
     useEffect(() => {
@@ -186,8 +194,11 @@ export const useFighterForm = () => {
     const loadTemplates = async () => {
         const bgs = await cardTemplateService.getBackgrounds();
         const borders = await cardTemplateService.getBorders();
+        const stickers = await cardTemplateService.getStickers();
+
         setBackgroundTemplates(bgs);
         setBorderTemplates(borders);
+        setStickerTemplates(stickers);
 
         // Select Random Default Background
         if (bgs && bgs.length > 0) {
@@ -199,6 +210,17 @@ export const useFighterForm = () => {
     const loadBanners = async () => {
         try { const data = await bannerService.getAll(false); setBanners(data); }
         catch (e) { console.log('Error loading banners', e); }
+    };
+
+    const loadBranding = async () => {
+        try {
+            const data = await AdminService.getActiveLogos();
+            if (data.success && data.logos.card) {
+                setCompanyLogoUri(data.logos.card.url);
+            }
+        } catch (e) {
+            console.log('Error loading branding', e);
+        }
     };
 
     const checkAuthStatus = async () => {
@@ -403,7 +425,14 @@ export const useFighterForm = () => {
         try {
             const imgly = (window as any).imglyBackgroundRemoval;
             if (!imgly) throw new Error("Librería IA no cargada.");
-            const imageBlob = await imgly.removeBackground(cardPhoto.uri, { debug: true });
+            const imageBlob = await imgly.removeBackground(cardPhoto.uri, {
+                debug: true,
+                model: 'small', // Usamos el modelo ligero para evitar errores de memoria
+                publicPath: window.location.origin + '/imgly/dist/',
+                onProgress: (status: string, progress: number) => {
+                    console.log(`IA [${status}]: ${Math.round(progress * 100)}%`);
+                }
+            });
             const url = URL.createObjectURL(imageBlob);
             setCardPhoto({ uri: url, name: 'bg-removed.png', type: 'image/png' });
         } catch (e: any) { Alert.alert('Error', e.message); } finally { setIsRemovingBg(false); }
@@ -413,6 +442,26 @@ export const useFighterForm = () => {
         setCardPhoto({ uri });
         setBanners(prev => prev.map(b => ({ ...b, selected: false })));
         scrollViewRef.current?.scrollToPosition(0, 0, true);
+    };
+
+    const toggleSticker = (url: string) => {
+        setSelectedStickers(prev => {
+            const isSelected = prev.includes(url);
+            if (isSelected) {
+                if (adjustmentFocus === url) setAdjustmentFocus('photo');
+                return prev.filter(s => s !== url);
+            } else {
+                if (!stickerTransforms[url]) {
+                    setStickerTransforms(current => ({
+                        ...current,
+                        [url]: { x: 0, y: 0, scale: 1, rotation: 0, flipX: false }
+                    }));
+                }
+                setAdjustmentFocus(url);
+                return [...prev, url];
+            }
+        });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     };
 
     const launchCamera = async () => {
@@ -603,16 +652,18 @@ export const useFighterForm = () => {
         isFieldValid, getFieldError, getFieldSuccess, validateField,
         currentStep, totalSteps, handleNext, handleBack,
         photo, cardPhoto, showImageOptions, setShowImageOptions, imageUploadMode, setImageUploadMode,
-        bgOffsetY, setBgOffsetY, bgOffsetX, setBgOffsetX, bgScale, setBgScale, bgFlipX, setBgFlipX, isRemovingBg, isLibReady,
-        backgroundTemplates, borderTemplates, selectedBorder, setSelectedBorder, selectedBackground, setSelectedBackground,
+        bgOffsetY, setBgOffsetY, bgOffsetX, setBgOffsetX, bgScale, setBgScale, bgFlipX, setBgFlipX, bgRotation, setBgRotation, isRemovingBg, isLibReady,
+        adjustmentFocus, setAdjustmentFocus, stickerTransforms, setStickerTransforms,
+        backgroundTemplates, borderTemplates, stickerTemplates, selectedBorder, setSelectedBorder, selectedBackground, setSelectedBackground, selectedStickers,
         handleRemoveBackground, launchCamera, launchGallery, pickProfilePhoto: () => { setImageUploadMode('profile'); setShowImageOptions(true); },
         pickCardBackground: () => { setImageUploadMode('background'); setShowImageOptions(true); },
         setCardBackgroundUrl: (url: string) => setSelectedBackground(url),
+        toggleSticker,
         banners, currentBannerIndex,
         handleSubmit, showSuccessModal, successData, handleCloseSuccessModal,
         checkingAuth, existingFighter, showIdentityModal, setShowIdentityModal,
         isAutoLoggedIn, handleBlurField,
-        fillDebugData,
+        fillDebugData, companyLogoUri,
         clearProfilePhoto: () => setPhoto(null),
         randomizeDesign: () => {
             if (backgroundTemplates.length > 0) {

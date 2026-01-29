@@ -74,9 +74,9 @@ export default function ApprovalFighters() {
 
         // Usamos Alert simple aquí porque es solo informativo y funciona bien en ambos
         if (Platform.OS === 'web') {
-           window.alert(`Peleador ${estado_inscripcion === 'aprobado' ? 'aprobado' : 'rechazado'} correctamente`);
+          window.alert(`Peleador ${estado_inscripcion === 'aprobado' ? 'aprobado' : 'rechazado'} correctamente`);
         } else {
-           Alert.alert('Éxito', `Peleador ${estado_inscripcion === 'aprobado' ? 'aprobado' : 'rechazado'} correctamente`);
+          Alert.alert('Éxito', `Peleador ${estado_inscripcion === 'aprobado' ? 'aprobado' : 'rechazado'} correctamente`);
         }
 
         // Recargar lista
@@ -84,11 +84,11 @@ export default function ApprovalFighters() {
       } catch (error: any) {
         console.error('❌ Error completo:', error);
         const errorMessage = error.response?.data?.message || 'No se pudo procesar la solicitud';
-        
+
         if (Platform.OS === 'web') {
-            window.alert('Error: ' + errorMessage);
+          window.alert('Error: ' + errorMessage);
         } else {
-            Alert.alert('Error', errorMessage);
+          Alert.alert('Error', errorMessage);
         }
       } finally {
         setProcessingId(null);
@@ -164,7 +164,7 @@ export default function ApprovalFighters() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
       <View style={styles.header}>
         <Text style={styles.title}>Peleadores Pendientes de Aprobación</Text>
         <Text style={styles.subtitle}>{peleadores.length} solicitudes pendientes</Text>

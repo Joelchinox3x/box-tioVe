@@ -27,7 +27,7 @@ import { generateDebugFighter } from '../../data/dummyFighters';
 
 const FighterFormScreen = () => {
     // UI State for Template Lists
-    const [activeTemplateTab, setActiveTemplateTab] = React.useState<'none' | 'backgrounds' | 'borders'>('none');
+    const [activeTemplateTab, setActiveTemplateTab] = React.useState<'none' | 'backgrounds' | 'borders' | 'stickers'>('none');
 
     const {
         navigation, scrollViewRef, handleFieldLayout, handleSectionLayout,
@@ -35,14 +35,92 @@ const FighterFormScreen = () => {
         isFieldValid, getFieldError, getFieldSuccess,
         currentStep, totalSteps, handleNext, handleBack,
         photo, cardPhoto, showImageOptions, setShowImageOptions, imageUploadMode,
-        bgOffsetY, setBgOffsetY, bgOffsetX, setBgOffsetX, bgScale, setBgScale, bgFlipX, setBgFlipX, isRemovingBg, isLibReady,
-        backgroundTemplates, borderTemplates, selectedBorder, setSelectedBorder, selectedBackground, setSelectedBackground,
+        bgOffsetY, setBgOffsetY, bgOffsetX, setBgOffsetX, bgScale, setBgScale, bgFlipX, setBgFlipX, bgRotation, setBgRotation, isRemovingBg, isLibReady,
+        adjustmentFocus, setAdjustmentFocus, stickerTransforms, setStickerTransforms,
+        backgroundTemplates, borderTemplates, stickerTemplates, selectedBorder, setSelectedBorder, selectedBackground, setSelectedBackground, selectedStickers,
         handleRemoveBackground, launchCamera, launchGallery, pickProfilePhoto, pickCardBackground, setCardBackgroundUrl, clearProfilePhoto,
+        toggleSticker,
         banners, currentBannerIndex,
         handleSubmit, showSuccessModal, successData, handleCloseSuccessModal,
         checkingAuth, existingFighter, showIdentityModal, setShowIdentityModal, isAutoLoggedIn, validateField, handleBlurField,
-        fillDebugData, randomizeDesign
+        fillDebugData, randomizeDesign, companyLogoUri
     } = useFighterForm();
+
+    const isPhotoFocus = adjustmentFocus === 'photo';
+    const currentTransform = !isPhotoFocus ? stickerTransforms[adjustmentFocus] : null;
+
+    // Map unified handlers for the Adjustment Controls
+    const currentScale = isPhotoFocus ? bgScale : (currentTransform?.scale || 1);
+    const currentOffsetX = isPhotoFocus ? bgOffsetX : (currentTransform?.x || 0);
+    const currentOffsetY = isPhotoFocus ? bgOffsetY : (currentTransform?.y || 0);
+    const currentRotation = isPhotoFocus ? 0 : (currentTransform?.rotation || 0);
+
+    const updateScale = (val: number | ((prev: number) => number)) => {
+        if (isPhotoFocus) { setBgScale(val as any); }
+        else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    scale: typeof val === 'function' ? (val as any)(prev[adjustmentFocus]?.scale || 1) : val
+                }
+            }));
+        }
+    };
+
+    const updateOffsetX = (val: number | ((prev: number) => number)) => {
+        if (isPhotoFocus) { setBgOffsetX(val as any); }
+        else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    x: typeof val === 'function' ? (val as any)(prev[adjustmentFocus]?.x || 0) : val
+                }
+            }));
+        }
+    };
+
+    const updateOffsetY = (val: number | ((prev: number) => number)) => {
+        if (isPhotoFocus) { setBgOffsetY(val as any); }
+        else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    y: typeof val === 'function' ? (val as any)(prev[adjustmentFocus]?.y || 0) : val
+                }
+            }));
+        }
+    };
+
+    const updateRotation = (val: number | ((prev: number) => number)) => {
+        if (isPhotoFocus) {
+            setBgRotation(typeof val === 'function' ? (val as any)(bgRotation) : val);
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    rotation: typeof val === 'function' ? (val as any)(prev[adjustmentFocus]?.rotation || 0) : val
+                }
+            }));
+        }
+    };
+
+    const updateFlipX = (val: boolean | ((prev: boolean) => boolean)) => {
+        if (isPhotoFocus) {
+            setBgFlipX(typeof val === 'function' ? (val as any)(bgFlipX) : val);
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    flipX: typeof val === 'function' ? (val as any)(prev[adjustmentFocus]?.flipX || false) : val
+                }
+            }));
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -104,7 +182,11 @@ const FighterFormScreen = () => {
                                 backgroundOffsetX={bgOffsetX}
                                 backgroundScale={bgScale}
                                 backgroundFlipX={bgFlipX}
+                                backgroundRotation={bgRotation}
                                 borderUri={selectedBorder}
+                                selectedStickers={selectedStickers}
+                                stickerTransforms={stickerTransforms}
+                                companyLogoUri={companyLogoUri}
                             />
                         </View>
 
@@ -114,15 +196,23 @@ const FighterFormScreen = () => {
                                 isWeb={Platform.OS === 'web'}
                                 showDebug={SHOW_DEBUG_GENERATOR}
                                 hasPhoto={!!cardPhoto}
-                                setBgOffsetX={setBgOffsetX}
-                                setBgOffsetY={setBgOffsetY}
-                                bgScale={bgScale}
-                                setBgScale={setBgScale}
-                                bgFlipX={bgFlipX}
-                                setBgFlipX={setBgFlipX}
+                                adjustmentFocus={adjustmentFocus}
+                                setAdjustmentFocus={setAdjustmentFocus}
+                                selectedStickers={selectedStickers}
+                                offsetX={currentOffsetX}
+                                setOffsetX={updateOffsetX}
+                                offsetY={currentOffsetY}
+                                setOffsetY={updateOffsetY}
+                                scale={currentScale}
+                                setScale={updateScale}
+                                flipX={isPhotoFocus ? bgFlipX : (currentTransform?.flipX || false)}
+                                setFlipX={updateFlipX}
+                                rotation={isPhotoFocus ? bgRotation : currentRotation}
+                                setRotation={updateRotation}
                                 onRemoveBackground={handleRemoveBackground}
                                 onOpenBackgrounds={() => setActiveTemplateTab(prev => prev === 'backgrounds' ? 'none' : 'backgrounds')}
                                 onOpenBorders={() => setActiveTemplateTab(prev => prev === 'borders' ? 'none' : 'borders')}
+                                onOpenStickers={() => setActiveTemplateTab(prev => prev === 'stickers' ? 'none' : 'stickers')}
                                 onRandomize={randomizeDesign}
                                 isRemovingBg={isRemovingBg}
                                 isLibReady={isLibReady}
@@ -133,21 +223,34 @@ const FighterFormScreen = () => {
                         {activeTemplateTab !== 'none' && (
                             <View style={{ marginVertical: 10 }}>
                                 <Text style={{ color: '#FFD700', marginBottom: 8, fontWeight: 'bold', fontSize: 12 }}>
-                                    {activeTemplateTab === 'backgrounds' ? 'SELECCIONA UN FONDO' : 'SELECCIONA UN MARCO'}
+                                    {activeTemplateTab === 'backgrounds' ? 'SELECCIONA UN FONDO' : activeTemplateTab === 'borders' ? 'SELECCIONA UN MARCO' : 'AÑADE STICKERS (Guanes, Lentes, etc.)'}
                                 </Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 5 }}>
                                     {activeTemplateTab === 'backgrounds' ? (
                                         backgroundTemplates.length > 0 ? backgroundTemplates.map((img, i) => (
                                             <TouchableOpacity key={i} onPress={() => setCardBackgroundUrl(img.url)}>
-                                                <Image source={{ uri: img.url }} style={{ width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: '#555', backgroundColor: '#000' }} />
+                                                <Image source={{ uri: img.url }} style={{ width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: selectedBackground === img.url ? '#FFD700' : '#555', backgroundColor: '#000' }} />
                                             </TouchableOpacity>
                                         )) : <Text style={{ color: 'gray', fontSize: 12 }}>No hay fondos disponibles</Text>
-                                    ) : (
+                                    ) : activeTemplateTab === 'borders' ? (
                                         borderTemplates.length > 0 ? borderTemplates.map((img, i) => (
                                             <TouchableOpacity key={i} onPress={() => setSelectedBorder(img.url)}>
                                                 <Image source={{ uri: img.url }} style={{ width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: selectedBorder === img.url ? '#FFD700' : '#555', backgroundColor: 'transparent' }} resizeMode="contain" />
                                             </TouchableOpacity>
                                         )) : <Text style={{ color: 'gray', fontSize: 12 }}>No hay marcos disponibles</Text>
+                                    ) : (
+                                        stickerTemplates.length > 0 ? stickerTemplates.map((img, i) => (
+                                            <TouchableOpacity key={i} onPress={() => toggleSticker(img.url)}>
+                                                <View style={{ width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: selectedStickers.includes(img.url) ? '#FFD700' : '#555', backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Image source={{ uri: img.url }} style={{ width: 60, height: 60 }} resizeMode="contain" />
+                                                    {selectedStickers.includes(img.url) && (
+                                                        <View style={{ position: 'absolute', top: 5, right: 5, backgroundColor: '#FFD700', borderRadius: 10 }}>
+                                                            <Ionicons name="checkmark-circle" size={16} color="#000" />
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            </TouchableOpacity>
+                                        )) : <Text style={{ color: 'gray', fontSize: 12 }}>No hay stickers disponibles. Sube archivos a backend/files/card_templates/stickers/</Text>
                                     )}
                                 </ScrollView>
                             </View>

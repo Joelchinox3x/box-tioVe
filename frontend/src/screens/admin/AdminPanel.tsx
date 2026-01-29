@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Text, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, Dimensions, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ScreenHeader } from '../../components/common/ScreenHeader';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 import { AdminService } from '../../services/AdminService';
 import ApprovalFighters from './ApprovalFighters';
 import ClubsManagement from './ClubsManagement';
 import AssignOwners from './AssignOwners';
 import PaymentManagement from './PaymentManagement';
 import AdminBannerScreen from './AdminBannerScreen';
+import AdminBrandingScreen from './AdminBrandingScreen';
 
-type AdminSection = 'dashboard' | 'fighters' | 'clubs' | 'owners' | 'payments' | 'banners';
+type AdminSection = 'dashboard' | 'fighters' | 'clubs' | 'owners' | 'payments' | 'banners' | 'branding';
 
 interface Estadisticas {
   peleadores_pendientes: number;
@@ -39,87 +44,117 @@ export default function AdminPanel({ navigation }: any) {
 
   const renderDashboard = () => (
     <View style={styles.dashboard}>
-      <Text style={styles.sectionTitle}>Panel de Administración</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#e74c3c" />
-      ) : (
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: '#e74c3c' }]}>
-            <Text style={styles.statNumber}>{estadisticas?.peleadores_pendientes || 0}</Text>
-            <Text style={styles.statLabel}>Peleadores Pendientes</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: '#27ae60' }]}>
-            <Text style={styles.statNumber}>{estadisticas?.peleadores_aprobados || 0}</Text>
-            <Text style={styles.statLabel}>Peleadores Aprobados</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: '#3498db' }]}>
-            <Text style={styles.statNumber}>{estadisticas?.clubs_activos || 0}</Text>
-            <Text style={styles.statLabel}>Clubs Activos</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: '#9b59b6' }]}>
-            <Text style={styles.statNumber}>{estadisticas?.usuarios_activos || 0}</Text>
-            <Text style={styles.statLabel}>Usuarios Activos</Text>
-          </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Cargando datos...</Text>
         </View>
+      ) : (
+        <>
+          <View style={styles.statsRow}>
+            <TouchableOpacity style={styles.statCardWrapper} onPress={() => setCurrentSection('fighters')}>
+              <LinearGradient colors={['#FF416C', '#FF4B2B']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                <Text style={styles.statNumber}>{estadisticas?.peleadores_pendientes || 0}</Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Pendiente</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.statCardWrapper} onPress={() => setCurrentSection('fighters')}>
+              <LinearGradient colors={['#11998e', '#38ef7d']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                <Text style={styles.statNumber}>{estadisticas?.peleadores_aprobados || 0}</Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Listo</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.statCardWrapper} onPress={() => setCurrentSection('clubs')}>
+              <LinearGradient colors={['#2193b0', '#6dd5ed']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                <Text style={styles.statNumber}>{estadisticas?.clubs_activos || 0}</Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Clubs</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.statCardWrapper}>
+              <LinearGradient colors={['#bdc3c7', '#2c3e50']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                <Text style={styles.statNumber}>{estadisticas?.usuarios_activos || 0}</Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Usuarios</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </>
       )}
 
+      <Text style={styles.sectionHeader}>GESTIÓN RÁPIDA</Text>
+
       <View style={styles.actionsGrid}>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#e74c3c' }]}
-          onPress={() => setCurrentSection('fighters')}
-        >
-          <Text style={styles.actionIcon}>👊</Text>
-          <Text style={styles.actionTitle}>Aprobar Peleadores</Text>
-          <Text style={styles.actionDesc}>Gestionar solicitudes pendientes</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('fighters')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(231, 76, 60, 0.1)' }]}>
+              <Ionicons name="fitness" size={24} color="#e74c3c" />
+            </View>
+            <Text style={styles.actionTitle}>Peleadores</Text>
+            <Text style={styles.actionDesc}>Aprobar y gestionar</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#3498db' }]}
-          onPress={() => setCurrentSection('clubs')}
-        >
-          <Text style={styles.actionIcon}>🏛️</Text>
-          <Text style={styles.actionTitle}>Gestionar Clubs</Text>
-          <Text style={styles.actionDesc}>Crear y administrar clubs</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('clubs')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(52, 152, 219, 0.1)' }]}>
+              <Ionicons name="business" size={24} color="#3498db" />
+            </View>
+            <Text style={styles.actionTitle}>Clubs</Text>
+            <Text style={styles.actionDesc}>Administrar gimnasios</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#f39c12' }]}
-          onPress={() => setCurrentSection('owners')}
-        >
-          <Text style={styles.actionIcon}>👤</Text>
-          <Text style={styles.actionTitle}>Asignar Dueños</Text>
-          <Text style={styles.actionDesc}>Buscar y asignar dueños a clubs</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('owners')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(241, 196, 15, 0.1)' }]}>
+              <Ionicons name="key" size={24} color="#f1c40f" />
+            </View>
+            <Text style={styles.actionTitle}>Dueños</Text>
+            <Text style={styles.actionDesc}>Asignar permisos</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#27ae60' }]}
-          onPress={() => setCurrentSection('payments')}
-        >
-          <Text style={styles.actionIcon}>💰</Text>
-          <Text style={styles.actionTitle}>Gestionar Pagos</Text>
-          <Text style={styles.actionDesc}>Inscripciones y confirmación de pagos</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('payments')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(46, 204, 113, 0.1)' }]}>
+              <Ionicons name="cash" size={24} color="#2ecc71" />
+            </View>
+            <Text style={styles.actionTitle}>Pagos</Text>
+            <Text style={styles.actionDesc}>Inscripciones</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#8e44ad' }]}
-          onPress={() => setCurrentSection('banners')}
-        >
-          <Text style={styles.actionIcon}>🖼️</Text>
-          <Text style={styles.actionTitle}>Banners Home</Text>
-          <Text style={styles.actionDesc}>Gestionar "¿Quieres Pelear?"</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('banners')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(155, 89, 182, 0.1)' }]}>
+              <Ionicons name="images" size={24} color="#9b59b6" />
+            </View>
+            <Text style={styles.actionTitle}>Banners</Text>
+            <Text style={styles.actionDesc}>Publicidad Home</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#e67e22' }]}
-          onPress={() => navigation.navigate('AdminBoletos')}
-        >
-          <Text style={styles.actionIcon}>🎫</Text>
-          <Text style={styles.actionTitle}>Gestionar Boletos</Text>
-          <Text style={styles.actionDesc}>Ventas, pagos y validación de entradas</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('branding')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(52, 73, 94, 0.1)' }]}>
+              <Ionicons name="brush" size={24} color="#34495e" />
+            </View>
+            <Text style={styles.actionTitle}>Branding</Text>
+            <Text style={styles.actionDesc}>Identidad Visual</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('AdminBoletos')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(230, 126, 34, 0.1)' }]}>
+              <Ionicons name="ticket" size={24} color="#e67e22" />
+            </View>
+            <Text style={styles.actionTitle}>Boletos</Text>
+            <Text style={styles.actionDesc}>Venta de entradas</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </View>
@@ -127,68 +162,44 @@ export default function AdminPanel({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ScreenHeader
+        title="PANEL DE CONTROL"
+        subtitle="ADMINISTRACIÓN GLOBAL"
+        showBackButton={true}
+        onBackPress={() => {
+          if (currentSection !== 'dashboard') {
+            setCurrentSection('dashboard');
+          } else {
+            navigation.navigate('Profile' as never);
+          }
+        }}
+      />
 
-      {/* Navegación superior */}
-      <View style={styles.navbar}>
-        <TouchableOpacity
-          style={[styles.navItem, currentSection === 'dashboard' && styles.navItemActive]}
-          onPress={() => setCurrentSection('dashboard')}
+      {/* Navegación tipo Tabs/Pills */}
+      <View style={styles.navContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={Platform.OS === 'web'}
+          contentContainerStyle={[styles.navContent, { paddingBottom: Platform.OS === 'web' ? 15 : 0 }]}
         >
-          <Text style={[styles.navText, currentSection === 'dashboard' && styles.navTextActive]}>
-            Dashboard
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, currentSection === 'fighters' && styles.navItemActive]}
-          onPress={() => setCurrentSection('fighters')}
-        >
-          <Text style={[styles.navText, currentSection === 'fighters' && styles.navTextActive]}>
-            Peleadores
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, currentSection === 'clubs' && styles.navItemActive]}
-          onPress={() => setCurrentSection('clubs')}
-        >
-          <Text style={[styles.navText, currentSection === 'clubs' && styles.navTextActive]}>
-            Clubs
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, currentSection === 'owners' && styles.navItemActive]}
-          onPress={() => setCurrentSection('owners')}
-        >
-          <Text style={[styles.navText, currentSection === 'owners' && styles.navTextActive]}>
-            Dueños
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, currentSection === 'payments' && styles.navItemActive]}
-          onPress={() => setCurrentSection('payments')}
-        >
-          <Text style={[styles.navText, currentSection === 'payments' && styles.navTextActive]}>
-            Pagos
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, currentSection === 'banners' && styles.navItemActive]}
-          onPress={() => setCurrentSection('banners')}
-        >
-          <Text style={[styles.navText, currentSection === 'banners' && styles.navTextActive]}>
-            Banners
-          </Text>
-        </TouchableOpacity>
+          {['fighters', 'clubs', 'owners', 'payments', 'banners', 'branding'].map((sec) => (
+            <TouchableOpacity
+              key={sec}
+              style={[styles.pill, currentSection === sec && styles.pillActive]}
+              onPress={() => setCurrentSection(sec as AdminSection)}
+            >
+              <Text style={[styles.pillText, currentSection === sec && styles.pillTextActive]}>
+                {sec.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {/* Contenido - Render directo sin wrapper condicional */}
+      {/* Contenido */}
       {currentSection === 'dashboard' && (
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
           {renderDashboard()}
         </ScrollView>
       )}
@@ -202,6 +213,8 @@ export default function AdminPanel({ navigation }: any) {
       {currentSection === 'payments' && <PaymentManagement />}
 
       {currentSection === 'banners' && <AdminBannerScreen />}
+
+      {currentSection === 'branding' && <AdminBrandingScreen />}
     </SafeAreaView>
   );
 }
@@ -209,99 +222,142 @@ export default function AdminPanel({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: COLORS.background,
   },
-  navbar: {
-    flexDirection: 'row',
-    backgroundColor: '#2c2c2c',
-    borderBottomWidth: 2,
-    borderBottomColor: '#e74c3c',
-  },
-  navItem: {
-    flex: 1,
-    paddingVertical: 15,
+  navContainer: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.primary,
+    flexDirection: 'row', // Align fixed button and list
     alignItems: 'center',
+    paddingLeft: SPACING.lg
   },
-  navItemActive: {
-    backgroundColor: '#e74c3c',
+  navContent: {
+    paddingHorizontal: SPACING.sm, // Reduced since paddingLeft is on parent
+    gap: SPACING.sm,
   },
-  navText: {
-    color: '#999',
-    fontSize: 14,
-    fontWeight: '600',
+  fixedPill: {
+    marginRight: SPACING.sm,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 0, // Reset default pill padding
+    paddingVertical: 0
   },
-  navTextActive: {
-    color: '#fff',
+  pill: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.text.tertiary,
+    backgroundColor: 'transparent',
+  },
+  pillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  pillText: {
+    color: COLORS.text.secondary,
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  pillTextActive: {
+    color: COLORS.text.inverse,
   },
   content: {
     flex: 1,
   },
   dashboard: {
+    padding: SPACING.lg,
+  },
+  loadingContainer: {
     padding: 20,
+    alignItems: 'center',
+    gap: 10
   },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
+  loadingText: {
+    color: '#AAA'
   },
-  statsGrid: {
+  statsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 30,
-    gap: 15,
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  statCardWrapper: {
+    flex: 1,
   },
   statCard: {
     flex: 1,
-    minWidth: '45%',
-    padding: 20,
-    borderRadius: 15,
+    padding: SPACING.sm, // Reduced padding
+    borderRadius: BORDER_RADIUS.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 80, // Reduced height
+    ...SHADOWS.md
   },
+  // Removed statIconContainer styles as we removed the icons
   statNumber: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 5,
+    fontSize: 24, // Slightly smaller
+    fontWeight: '900',
+    color: '#FFF',
+    marginBottom: 0,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3
   },
   statLabel: {
-    fontSize: 14,
-    color: '#fff',
-    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: 'bold',
+    textTransform: 'uppercase'
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
+    letterSpacing: 1
   },
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 15,
+    gap: SPACING.md,
   },
   actionCard: {
-    flex: 1,
-    minWidth: '45%',
-    padding: 20,
-    borderRadius: 15,
-    alignItems: 'center',
+    width: '30%', // 3 columns
+    height: 150,
+
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+
+    ...SHADOWS.sm,
   },
-  actionIcon: {
-    fontSize: 40,
-    marginBottom: 10,
+  actionGradient: {
+    flex: 1,
+    padding: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs
+  },
+  actionIconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xs
   },
   actionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 5,
-    textAlign: 'center',
+    color: COLORS.text.primary,
+    textAlign: 'center'
   },
   actionDesc: {
-    fontSize: 12,
-    color: '#fff',
-    textAlign: 'center',
-    opacity: 0.9,
-  },
-  placeholder: {
-    fontSize: 18,
-    color: '#fff',
-    textAlign: 'center',
-    marginTop: 50,
-  },
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+    textAlign: 'center'
+  }
 });

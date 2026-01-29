@@ -252,8 +252,8 @@ try {
             require_once __DIR__ . '/../controllers/CardTemplatesController.php';
             $controller = new CardTemplatesController();
 
-            if ($method === 'GET' && ($id === 'backgrounds' || $id === 'borders')) {
-                // GET /api/card-templates/backgrounds (o borders)
+            if ($method === 'GET' && ($id === 'backgrounds' || $id === 'borders' || $id === 'stickers')) {
+                // GET /api/card-templates/backgrounds (o borders o stickers)
                 echo json_encode($controller->listar($id));
             } else {
                 http_response_code(404);
@@ -294,6 +294,33 @@ try {
         case 'admin':
             require_once __DIR__ . '/../controllers/AdminController.php';
             $controller = new AdminController($db);
+
+            // RUTAS: /api/admin/branding/...
+            if ($id === 'branding') {
+                require_once __DIR__ . '/../controllers/BrandingController.php';
+                $brandingController = new BrandingController($db);
+
+                if ($action === 'logos' && $method === 'GET') {
+                    // GET /api/admin/branding/logos?tipo=card
+                    $tipo = $_GET['tipo'] ?? null;
+                    echo json_encode($brandingController->getAllLogos($tipo));
+                } elseif ($action === 'active' && $method === 'GET') {
+                    // GET /api/admin/branding/active
+                    echo json_encode($brandingController->getActiveLogos());
+                } elseif ($action === 'upload' && $method === 'POST') {
+                    // POST /api/admin/branding/upload
+                    echo json_encode($brandingController->uploadLogo($_FILES, $_POST));
+                } elseif ($action === 'set-active' && $method === 'POST') {
+                    // POST /api/admin/branding/set-active
+                    $data = json_decode(file_get_contents("php://input"), true);
+                    $logoId = $data['id'] ?? null;
+                    echo json_encode($brandingController->setActiveLogo($logoId));
+                } else {
+                    http_response_code(404);
+                    echo json_encode(["error" => "Sub-recurso de branding no encontrado"]);
+                }
+                break;
+            }
 
             if ($method === 'GET' && $id === 'estadisticas') {
                 // GET /api/admin/estadisticas - Estadísticas del dashboard

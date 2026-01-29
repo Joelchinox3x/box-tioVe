@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { createTextShadow } from '../utils/shadows';
+import { AdminService } from '../services/AdminService';
 import { FighterCard } from './common/FighterCard';
 
 const { width } = Dimensions.get('window');
@@ -32,9 +33,23 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
 }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
+    const [companyLogoUri, setCompanyLogoUri] = React.useState<string | null>(null);
 
     useEffect(() => {
         if (visible) {
+            // Fetch branding
+            const fetchBranding = async () => {
+                try {
+                    const data = await AdminService.getActiveLogos();
+                    if (data.success && data.logos.card) {
+                        setCompanyLogoUri(data.logos.card.url);
+                    }
+                } catch (e) {
+                    console.log('Error fetching branding', e);
+                }
+            };
+            fetchBranding();
+
             Animated.parallel([
                 Animated.spring(scaleAnim, {
                     toValue: 1,
@@ -83,6 +98,7 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
                                 <FighterCard
                                     fighter={fighter}
                                     variant="large"
+                                    companyLogoUri={companyLogoUri}
                                 />
                             </View>
 

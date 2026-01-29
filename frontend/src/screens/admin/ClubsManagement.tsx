@@ -109,7 +109,7 @@ export default function ClubsManagement() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.list}>
+      <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 100 }}>
         {clubs.map((club) => (
           <View key={club.id} style={styles.card}>
             <View style={styles.cardHeader}>

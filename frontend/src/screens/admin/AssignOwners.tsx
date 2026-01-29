@@ -103,7 +103,7 @@ export default function AssignOwners() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
       <View style={styles.header}>
         <Text style={styles.title}>Asignar Dueños a Clubs</Text>
         <Text style={styles.subtitle}>

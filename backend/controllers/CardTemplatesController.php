@@ -19,10 +19,10 @@ class CardTemplatesController {
      */
     public function listar($category) {
         // Validar categoría para seguridad (evitar traversal)
-        if (!in_array($category, ['backgrounds', 'borders'])) {
+        if (!in_array($category, ['backgrounds', 'borders', 'stickers'])) {
             return [
                 "success" => false, 
-                "message" => "Categoría inválida. Use 'backgrounds' o 'borders'."
+                "message" => "Categoría inválida. Use 'backgrounds', 'borders' o 'stickers'."
             ];
         }
 

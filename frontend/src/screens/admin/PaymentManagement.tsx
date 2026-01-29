@@ -176,7 +176,7 @@ export default function PaymentManagement() {
       </View>
 
       {/* Lista de inscripciones */}
-      <ScrollView style={styles.list}>
+      <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 100 }}>
         {inscripciones.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No hay inscripciones para mostrar</Text>

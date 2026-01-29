@@ -7,6 +7,7 @@ import { createShadow, createTextShadow } from '../utils/shadows';
 import { FighterCard } from './common/FighterCard';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import { AdminService } from '../services/AdminService';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +35,12 @@ interface EpicFighterSuccessModalProps {
     backgroundOffsetX?: number;
     backgroundScale?: number;
     backgroundResizeMode?: 'cover' | 'contain' | 'stretch' | 'center';
+    companyLogoUri?: string | null;
+    stickerUri?: string | null;
+    stickerOffsetY?: number;
+    stickerOffsetX?: number;
+    stickerScale?: number;
+    stickerRotation?: number;
 }
 
 export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = ({
@@ -49,7 +56,13 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
     backgroundOffsetY = 0,
     backgroundOffsetX = 0,
     backgroundScale = 1,
-    backgroundResizeMode = 'contain'
+    backgroundResizeMode = 'contain',
+    companyLogoUri = null,
+    stickerUri = null,
+    stickerOffsetY = 0,
+    stickerOffsetX = 0,
+    stickerScale = 1,
+    stickerRotation = 0
 }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -74,6 +87,25 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
             opacityAnim.setValue(0);
         }
     }, [visible]);
+
+    // Fetch Company Logo
+    const [fetchedLogo, setFetchedLogo] = React.useState<string | null>(null);
+
+    useEffect(() => {
+        if (visible && !companyLogoUri) {
+            const fetchLogo = async () => {
+                try {
+                    const data = await AdminService.getActiveLogos();
+                    if (data.success && data.logos.card) {
+                        setFetchedLogo(data.logos.card.url);
+                    }
+                } catch (e) {
+                    console.error("Error fetching logo", e);
+                }
+            };
+            fetchLogo();
+        }
+    }, [visible, companyLogoUri]);
 
     const handleShare = async () => {
         try {
@@ -161,6 +193,12 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
                                     backgroundOffsetX={backgroundOffsetX}
                                     backgroundScale={backgroundScale}
                                     backgroundResizeMode={backgroundResizeMode}
+                                    companyLogoUri={companyLogoUri || fetchedLogo}
+                                    stickerUri={stickerUri}
+                                    stickerOffsetY={stickerOffsetY}
+                                    stickerOffsetX={stickerOffsetX}
+                                    stickerScale={stickerScale}
+                                    stickerRotation={stickerRotation}
                                 />
                             </View>
 
@@ -171,11 +209,15 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
                                         <Text style={styles.credentialLabel}>Usuario:</Text>
                                         <Text style={styles.credentialValue}>{email}</Text>
                                     </View>
-                                    <View style={styles.credentialRow}>
-                                        <Ionicons name="key" size={18} color={COLORS.text.secondary} />
-                                        <Text style={styles.credentialLabel}>Contraseña:</Text>
-                                        <Text style={styles.credentialValue}>{dni}</Text>
-                                        <Text style={styles.tag}>(Temporal)</Text>
+                                    <View style={[styles.credentialRow, { alignItems: 'flex-start' }]}>
+                                        <Ionicons name="key" size={18} color={COLORS.text.secondary} style={{ marginTop: 3 }} />
+                                        <Text style={[styles.credentialLabel, { marginTop: 3 }]}>Contraseña:</Text>
+                                        <View>
+                                            <Text style={styles.credentialValue}>{dni}</Text>
+                                            <Text style={[styles.tag, { alignSelf: 'flex-start', marginTop: 4 }]}>
+                                                (Temporal)
+                                            </Text>
+                                        </View>
                                     </View>
                                     <Text style={styles.securityHint}>
                                         * Tu DNI es tu contraseña temporal. Por seguridad, cámbiala al ingresar.
@@ -187,7 +229,7 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
                                 {isAlreadyAuth
                                     ? "Registro completado exitosamente."
                                     : (isAutoLoggedIn
-                                        ? "Hemos iniciado sesión automáticamente por ti."
+                                        ? "Entra a tu perfil para cambiar la contraseña."
                                         : "Usa estas credenciales para acceder a tu perfil.")
                                 }
                             </Text>

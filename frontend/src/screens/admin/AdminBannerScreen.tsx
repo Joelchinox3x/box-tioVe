@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         gap: SPACING.md,
-        paddingBottom: 40,
+        paddingBottom: 100,
     },
     card: {
         backgroundColor: COLORS.surface,

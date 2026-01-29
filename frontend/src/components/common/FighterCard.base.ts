@@ -28,6 +28,14 @@ export const styles = StyleSheet.create({
     cardImage: {
         opacity: 0.9,
     },
+    companyLogo: {
+        position: 'absolute',
+        bottom: 12,
+        alignSelf: 'center',
+        width: '50%',
+        height: 50,
+        zIndex: 5,
+    },
     overlay: {
         flex: 1,
         padding: SPACING.md,

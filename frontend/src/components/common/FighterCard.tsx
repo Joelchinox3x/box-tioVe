@@ -28,8 +28,12 @@ interface FighterCardProps {
     backgroundOffsetX?: number;
     backgroundScale?: number;
     backgroundFlipX?: boolean;
+    backgroundRotation?: number;
     borderUri?: string | null;
     backgroundResizeMode?: 'cover' | 'contain' | 'stretch' | 'center';
+    companyLogoUri?: string | null;
+    selectedStickers?: string[];
+    stickerTransforms?: Record<string, { x: number, y: number, scale: number, rotation: number, flipX: boolean }>;
 }
 
 export const FighterCard: React.FC<FighterCardProps> = ({
@@ -45,8 +49,12 @@ export const FighterCard: React.FC<FighterCardProps> = ({
     backgroundOffsetX = 0,
     backgroundScale = 1,
     backgroundFlipX = false,
+    backgroundRotation = 0,
     borderUri = null,
-    backgroundResizeMode = 'contain'
+    backgroundResizeMode = 'contain',
+    companyLogoUri = null,
+    selectedStickers = [],
+    stickerTransforms = {}
 }) => {
     const { nombre, apellidos, apodo, peso, genero, photoUri, clubName, record, edad, altura } = fighter;
 
@@ -127,7 +135,8 @@ export const FighterCard: React.FC<FighterCardProps> = ({
                                     { translateY: backgroundOffsetY },
                                     { translateX: backgroundOffsetX },
                                     { scale: backgroundScale },
-                                    { scaleX: backgroundFlipX ? -1 : 1 }
+                                    { scaleX: backgroundFlipX ? -1 : 1 },
+                                    { rotate: `${backgroundRotation}deg` }
                                 ]
                             }
                         ]}
@@ -135,7 +144,42 @@ export const FighterCard: React.FC<FighterCardProps> = ({
                     />
                 )}
 
-                {/* LAYER 3: BORDER */}
+                {/* LAYER 3: COMPANY LOGO */}
+                {companyLogoUri && (
+                    <Image
+                        source={{ uri: companyLogoUri }}
+                        style={styles.companyLogo}
+                        resizeMode="contain"
+                    />
+                )}
+
+                {/* LAYER 4: STICKERS */}
+                {selectedStickers.map((uri, index) => {
+                    const transform = stickerTransforms[uri] || { x: 0, y: 0, scale: 1, rotation: 0, flipX: false };
+                    return (
+                        <Image
+                            key={`${uri}-${index}`}
+                            source={{ uri }}
+                            style={[
+                                StyleSheet.absoluteFill,
+                                styles.cardImage,
+                                {
+                                    zIndex: 11 + index, // Above Border (zIndex 10)
+                                    transform: [
+                                        { translateY: transform.y },
+                                        { translateX: transform.x },
+                                        { scale: transform.scale },
+                                        { scaleX: transform.flipX ? -1 : 1 },
+                                        { rotate: `${transform.rotation}deg` }
+                                    ]
+                                }
+                            ]}
+                            resizeMode="contain"
+                        />
+                    );
+                })}
+
+                {/* LAYER 5: BORDER */}
                 {borderUri && (
                     <Image
                         source={{ uri: borderUri }}
