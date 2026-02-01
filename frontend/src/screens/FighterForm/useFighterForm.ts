@@ -16,6 +16,22 @@ import { FormData, FormErrors } from './types';
 import api from '../../services/api';
 import { generateDebugFighter } from '../../data/dummyFighters';
 import { AdminService } from '../../services/AdminService';
+import { useBackgroundRemoval } from '../../hooks/useBackgroundRemoval';
+
+export interface FighterLayer {
+    id: string;
+    uri: string;
+    // Transform props
+    x: number;
+    y: number;
+    scale: number;
+    rotation: number;
+    flipX: boolean;
+    // New Visual Props
+    preset?: string;
+    effect?: string;
+    effectColor?: string;
+}
 
 export const useFighterForm = () => {
     const navigation = useNavigation();
@@ -70,18 +86,17 @@ export const useFighterForm = () => {
 
     // Image State
     const [photo, setPhoto] = useState<{ uri: string; name?: string; type?: string } | null>(null);
-    const [cardPhoto, setCardPhoto] = useState<{ uri: string; name?: string; type?: string } | null>(null);
-    const [showImageOptions, setShowImageOptions] = useState(false);
-    const [imageUploadMode, setImageUploadMode] = useState<'profile' | 'background'>('background');
 
-    // Image Adjustment State
-    const [bgOffsetY, setBgOffsetY] = useState(0);
-    const [bgOffsetX, setBgOffsetX] = useState(0);
-    const [bgScale, setBgScale] = useState(1);
-    const [bgFlipX, setBgFlipX] = useState(false);
-    const [bgRotation, setBgRotation] = useState(0);
-    const [isRemovingBg, setIsRemovingBg] = useState(false);
-    const [isLibReady, setIsLibReady] = useState(false);
+    // Multi-Layer State (Replaces cardPhoto & single bg vars)
+    const [fighterLayers, setFighterLayers] = useState<FighterLayer[]>([]);
+
+    const [showImageOptions, setShowImageOptions] = useState(false);
+    // imageUploadMode still useful for knowing if we are adding to card or profile? 
+    // Actually we can keep it, 'background' now means 'add to layers'
+    const [imageUploadMode, setImageUploadMode] = useState<'profile' | 'background'>('background');
+    const [lastImageSource, setLastImageSource] = useState<'camera' | 'gallery' | null>(null);
+
+    const { removeBackground, isProcessing: isRemovingBg, isLibReady } = useBackgroundRemoval();
 
     // Templates State
     const [backgroundTemplates, setBackgroundTemplates] = useState<any[]>([]);
@@ -97,6 +112,157 @@ export const useFighterForm = () => {
     const [companyLogoUri, setCompanyLogoUri] = useState<string | null>(null);
     const [adjustmentFocus, setAdjustmentFocus] = useState<'photo' | string>('photo');
     const [stickerTransforms, setStickerTransforms] = useState<Record<string, { x: number, y: number, scale: number, rotation: number, flipX: boolean }>>({});
+    const [isManualSelection, setIsManualSelection] = useState(false);
+
+    // Helper to get current adjustment values based on focus
+    const getCurrentLayer = () => {
+        if (adjustmentFocus === 'photo') return null; // Legacy/Fallback
+        return fighterLayers.find(l => l.id === adjustmentFocus);
+    };
+
+    const currentOffsetX = getCurrentLayer()?.x ?? 0;
+    const currentOffsetY = getCurrentLayer()?.y ?? 0;
+    const currentScale = getCurrentLayer()?.scale ?? 1;
+    const currentRotation = getCurrentLayer()?.rotation ?? 0;
+    const currentFlipX = getCurrentLayer()?.flipX ?? false;
+
+    // Layer Management
+    const addFighterLayer = (uri: string, preset: string = 'original', effect: string = 'none', effectColor: string = '#00FFFF') => {
+        if (fighterLayers.length >= 3) return;
+
+        // Stop auto-banners
+        setIsManualSelection(true);
+
+        // If it's the first manual photo, pick a random bg and border if none selected
+        if (fighterLayers.length === 0) {
+            if (backgroundTemplates.length > 0 && !selectedBackground) {
+                const randBg = backgroundTemplates[Math.floor(Math.random() * backgroundTemplates.length)].url;
+                setSelectedBackground(randBg);
+            }
+            if (borderTemplates.length > 0 && !selectedBorder) {
+                const randBorder = borderTemplates[Math.floor(Math.random() * borderTemplates.length)].url;
+                setSelectedBorder(randBorder);
+            }
+        }
+
+        const newLayer: FighterLayer = {
+            id: `layer-${Date.now()}`,
+            uri,
+            x: 0, y: 0, scale: 1, rotation: 0, flipX: false,
+            preset,
+            effect,
+            effectColor
+        };
+        setFighterLayers(prev => [...prev, newLayer]);
+        setAdjustmentFocus(newLayer.id); // Auto-focus new layer
+    };
+
+    const removeFighterLayer = (id: string) => {
+        setFighterLayers(prev => prev.filter(l => l.id !== id));
+        if (adjustmentFocus === id) setAdjustmentFocus('photo'); // Fallback or clear
+    };
+
+    const updateFighterLayer = (id: string, updates: Partial<FighterLayer>) => {
+        setFighterLayers(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+    };
+
+    // Unified Update Helpers (Proxies to updateFighterLayer or StickerTransforms)
+    // Unified Updates for Layers AND Stickers
+    const updateOffsetX = (val: number | ((prev: number) => number)) => {
+        if (adjustmentFocus.startsWith('layer-')) {
+            setFighterLayers(prev => prev.map(l => {
+                if (l.id !== adjustmentFocus) return l;
+                const newVal = typeof val === 'function' ? val(l.x) : val;
+                return { ...l, x: newVal };
+            }));
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    x: typeof val === 'function' ? val(prev[adjustmentFocus]?.x || 0) : val
+                }
+            }));
+        }
+    };
+
+    const updateOffsetY = (val: number | ((prev: number) => number)) => {
+        if (adjustmentFocus.startsWith('layer-')) {
+            setFighterLayers(prev => prev.map(l => {
+                if (l.id !== adjustmentFocus) return l;
+                const newVal = typeof val === 'function' ? val(l.y) : val;
+                return { ...l, y: newVal };
+            }));
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    y: typeof val === 'function' ? val(prev[adjustmentFocus]?.y || 0) : val
+                }
+            }));
+        }
+    };
+
+    const updateScale = (val: number | ((prev: number) => number)) => {
+        if (adjustmentFocus.startsWith('layer-')) {
+            setFighterLayers(prev => prev.map(l => {
+                if (l.id !== adjustmentFocus) return l;
+                const newVal = typeof val === 'function' ? val(l.scale) : val;
+                return { ...l, scale: newVal };
+            }));
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    scale: typeof val === 'function' ? val(prev[adjustmentFocus]?.scale || 1) : val
+                }
+            }));
+        }
+    };
+
+    const updateRotation = (val: number | ((prev: number) => number)) => {
+        if (adjustmentFocus.startsWith('layer-')) {
+            setFighterLayers(prev => prev.map(l => {
+                if (l.id !== adjustmentFocus) return l;
+                const newVal = typeof val === 'function' ? val(l.rotation) : val;
+                return { ...l, rotation: newVal };
+            }));
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    rotation: typeof val === 'function' ? val(prev[adjustmentFocus]?.rotation || 0) : val
+                }
+            }));
+        }
+    };
+
+    const updateFlipX = (val: boolean | ((prev: boolean) => boolean)) => {
+        if (adjustmentFocus.startsWith('layer-')) {
+            setFighterLayers(prev => prev.map(l => {
+                if (l.id !== adjustmentFocus) return l;
+                const newVal = typeof val === 'function' ? val(l.flipX) : val;
+                return { ...l, flipX: newVal };
+            }));
+        } else {
+            setStickerTransforms(prev => ({
+                ...prev,
+                [adjustmentFocus]: {
+                    ...prev[adjustmentFocus],
+                    flipX: typeof val === 'function' ? val(prev[adjustmentFocus]?.flipX || false) : val
+                }
+            }));
+        }
+    };
+
+    // NOTE: Because we are inside a hook, I will expose these helpers properly later or 
+    // keep utilizing the unified 'ImageAdjustmentControls' props.
+    // For now, let's keep the return clean.
+    const [isImageCropperVisible, setIsImageCropperVisible] = useState(false);
+    const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
 
     // Audio
     const punch3Player = useAudioPlayer(require('../../../assets/sounds/punch-03.mp3'));
@@ -121,10 +287,17 @@ export const useFighterForm = () => {
     }, []);
 
     useEffect(() => {
-        if (banners.length <= 1) return;
+        if (banners.length <= 1 || isManualSelection) return;
         const interval = setInterval(() => setCurrentBannerIndex(prev => (prev + 1) % banners.length), 5000);
         return () => clearInterval(interval);
-    }, [banners]);
+    }, [banners, isManualSelection]);
+
+    // Restore Default Banner Background Behavior
+    useEffect(() => {
+        if (!isManualSelection && banners.length > 0 && banners[currentBannerIndex]) {
+            setSelectedBackground(banners[currentBannerIndex].url);
+        }
+    }, [currentBannerIndex, banners, isManualSelection]);
 
     useEffect(() => {
         if (existingFighter) setShowIdentityModal(true);
@@ -137,29 +310,6 @@ export const useFighterForm = () => {
             setShowSuccessModal(true);
         }
     }, [successData]);
-
-    // CDN Injection Logic
-    useEffect(() => {
-        if (Platform.OS === 'web') {
-            const scriptId = 'imgly-bg-removal-cdn';
-            const checkReady = () => {
-                if ((window as any).imglyBackgroundRemoval) { setIsLibReady(true); return true; }
-                return false;
-            };
-            if (document.getElementById(scriptId)) { checkReady(); } else {
-                const script = document.createElement('script');
-                script.id = scriptId;
-                script.type = 'module';
-                script.innerHTML = `
-          import { removeBackground } from 'https://esm.sh/@imgly/background-removal@1.7.0';
-          window.imglyBackgroundRemoval = { removeBackground };
-          document.dispatchEvent(new Event('imgly-ready'));
-        `;
-                document.body.appendChild(script);
-                document.addEventListener('imgly-ready', () => { console.log("IA Library Loaded via ESM"); checkReady(); }, { once: true });
-            }
-        }
-    }, []);
 
     // Validation Effects (DNI & Email)
     useEffect(() => {
@@ -199,12 +349,6 @@ export const useFighterForm = () => {
         setBackgroundTemplates(bgs);
         setBorderTemplates(borders);
         setStickerTemplates(stickers);
-
-        // Select Random Default Background
-        if (bgs && bgs.length > 0) {
-            const randomBg = bgs[Math.floor(Math.random() * bgs.length)].url;
-            setSelectedBackground(randomBg);
-        }
     };
 
     const loadBanners = async () => {
@@ -413,44 +557,69 @@ export const useFighterForm = () => {
 
     const fillDebugData = () => {
         const dummy = generateDebugFighter();
-        setFormData(prev => ({ ...prev, ...dummy }));
+
+        // Randomly pick a club if available from the loaded clubs
+        let selectedClubId = formData.club_id;
+        if (clubs && clubs.length > 0) {
+            const randomIndex = Math.floor(Math.random() * clubs.length);
+            selectedClubId = String(clubs[randomIndex].id);
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            ...dummy,
+            club_id: selectedClubId
+        }));
         setErrors({}); // Clear all errors
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     };
 
 
     const handleRemoveBackground = async () => {
-        if (!cardPhoto?.uri) return;
-        setIsRemovingBg(true);
+        const layer = getCurrentLayer();
+        if (!layer?.uri) return;
         try {
-            const imgly = (window as any).imglyBackgroundRemoval;
-            if (!imgly) throw new Error("Librería IA no cargada.");
-            const imageBlob = await imgly.removeBackground(cardPhoto.uri, {
-                debug: true,
-                model: 'small', // Usamos el modelo ligero para evitar errores de memoria
-                publicPath: window.location.origin + '/imgly/dist/',
-                onProgress: (status: string, progress: number) => {
-                    console.log(`IA [${status}]: ${Math.round(progress * 100)}%`);
-                }
-            });
-            const url = URL.createObjectURL(imageBlob);
-            setCardPhoto({ uri: url, name: 'bg-removed.png', type: 'image/png' });
-        } catch (e: any) { Alert.alert('Error', e.message); } finally { setIsRemovingBg(false); }
+            const url = await removeBackground(layer.uri);
+            if (url) {
+                updateFighterLayer(layer.id, { uri: url });
+            }
+        } catch (e: any) { Alert.alert('Error', e.message); }
     };
 
     const handleBackgroundSelected = async (uri: string) => {
-        setCardPhoto({ uri });
+        // Legacy function, might not be needed or refactored to addLayer
+        // But for consistency:
+        addFighterLayer(uri);
+        // setIsManualSelection(true); // Maybe not needed
+        setIsManualSelection(true);
+
+        // Auto-randomize background and border for a "wow" effect when first choosing personal photo
+        if (backgroundTemplates.length > 0) {
+            const randBg = backgroundTemplates[Math.floor(Math.random() * backgroundTemplates.length)].url;
+            setSelectedBackground(randBg);
+        }
+        if (borderTemplates.length > 0) {
+            const randBorder = borderTemplates[Math.floor(Math.random() * borderTemplates.length)].url;
+            setSelectedBorder(randBorder);
+        }
+
         setBanners(prev => prev.map(b => ({ ...b, selected: false })));
         scrollViewRef.current?.scrollToPosition(0, 0, true);
     };
 
     const toggleSticker = (url: string) => {
+        setIsManualSelection(true); // Stop auto-banners
         setSelectedStickers(prev => {
             const isSelected = prev.includes(url);
             if (isSelected) {
-                if (adjustmentFocus === url) setAdjustmentFocus('photo');
+                if (adjustmentFocus === url) setAdjustmentFocus('photo'); // fallback
                 return prev.filter(s => s !== url);
             } else {
+                // Limit to 3 stickers maximum
+                if (prev.length >= 3) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    return prev;
+                }
                 if (!stickerTransforms[url]) {
                     setStickerTransforms(current => ({
                         ...current,
@@ -464,36 +633,59 @@ export const useFighterForm = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     };
 
-    const launchCamera = async () => {
+    const launchCamera = async (explicitMode?: 'profile' | 'background') => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') return Alert.alert('Error', 'Se requiere cámara');
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: false,
-            aspect: undefined,
             quality: 0.8,
         });
         if (!result.canceled && result.assets[0].uri) {
-            if (imageUploadMode === 'background') await handleBackgroundSelected(result.assets[0].uri);
-            else { setPhoto({ uri: result.assets[0].uri }); setBanners(prev => prev.map(b => ({ ...b, selected: false }))); }
+            const uri = result.assets[0].uri;
+            const mode = explicitMode || imageUploadMode;
+
+            // Universal Flow: Use WebImageCropper for both Web and Native
+            setPendingImageUri(uri);
+            setImageUploadMode(mode);
+            setLastImageSource('camera');
+            setIsImageCropperVisible(true);
             setShowImageOptions(false);
         }
     };
 
-    const launchGallery = async () => {
+    const launchGallery = async (explicitMode?: 'profile' | 'background') => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return Alert.alert('Error', 'Se requiere galería');
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: false,
-            aspect: undefined,
             quality: 0.8,
         });
         if (!result.canceled && result.assets[0].uri) {
-            if (imageUploadMode === 'background') await handleBackgroundSelected(result.assets[0].uri);
-            else { setPhoto({ uri: result.assets[0].uri }); setBanners(prev => prev.map(b => ({ ...b, selected: false }))); }
+            const uri = result.assets[0].uri;
+            const mode = explicitMode || imageUploadMode;
+
+            // Universal Flow: Use WebImageCropper for both Web and Native
+            setPendingImageUri(uri);
+            setImageUploadMode(mode);
+            setLastImageSource('gallery');
+            setIsImageCropperVisible(true);
             setShowImageOptions(false);
         }
+    };
+
+    const handleImageCropConfirm = async (croppedUri: string, preset: string = 'original', effect: string = 'none', effectColor: string = '#00FFFF') => {
+        if (imageUploadMode === 'background') {
+            // New Multi-Layer Logic: Add as new layer
+            addFighterLayer(croppedUri, preset, effect, effectColor);
+        } else {
+            // Profile Photo Logic (Unchanged)
+            setPhoto({ uri: croppedUri });
+            setBanners(prev => prev.map(b => ({ ...b, selected: false })));
+        }
+        setIsImageCropperVisible(false);
+        setPendingImageUri(null);
     };
 
     const validateForm = (): boolean => {
@@ -567,18 +759,23 @@ export const useFighterForm = () => {
             }
 
             // 4. AGREGAR FOTO DE FONDO (CARD)
-            if (cardPhoto) {
+            // 4. AGREGAR FOTO DE FONDO (CARD) - Now using Layers
+            // For backward compatibility or simplest approach, we send the FIRST layer as the background
+            // Or ideally, we should compose them. But user didn't ask for composition logic yet.
+            // We will send the first layer as 'foto_background' if exists.
+            if (fighterLayers.length > 0) {
+                const mainLayer = fighterLayers[0];
                 if (Platform.OS === 'web') {
                     try {
-                        const response = await fetch(cardPhoto.uri);
+                        const response = await fetch(mainLayer.uri);
                         const blob = await response.blob();
-                        form.append('foto_background', blob, cardPhoto.name || 'card_bg.jpg');
+                        form.append('foto_background', blob, 'layer_0.jpg');
                     } catch (blobErr) { console.error("Error blob web card:", blobErr); }
                 } else {
                     form.append('foto_background', {
-                        uri: cardPhoto.uri,
-                        name: cardPhoto.name || 'card_bg.jpg',
-                        type: cardPhoto.type || 'image/jpeg',
+                        uri: mainLayer.uri,
+                        name: 'layer_0.jpg',
+                        type: 'image/jpeg',
                     } as any);
                 }
             }
@@ -619,7 +816,7 @@ export const useFighterForm = () => {
                 genero: formData.genero,
                 email: formData.email,
                 dni: formData.dni,
-                photoUri: cardPhoto?.uri || photo?.uri,
+                photoUri: fighterLayers.length > 0 ? fighterLayers[0].uri : photo?.uri,
                 edad: formData.edad,
                 altura: formData.altura,
                 clubName: clubs?.find(c => c.id === formData.club_id)?.nombre
@@ -636,7 +833,7 @@ export const useFighterForm = () => {
     };
 
     const handleCloseSuccessModal = () => {
-        setShowSuccessModal(false); setSuccessData(null); setPhoto(null); setCardPhoto(null);
+        setShowSuccessModal(false); setSuccessData(null); setPhoto(null); setFighterLayers([]);
         if (isAlreadyAuth) {
             setFormData(prev => ({ ...prev, nombre: '', apellidos: '', apodo: '', email: '', dni: '', telefono: '' })); // Reset essential
             setCurrentStep(1);
@@ -651,21 +848,35 @@ export const useFighterForm = () => {
         formData, updateField, focusedField, setFocusedField, errors, isSubmitting, clubs, loadingClubs,
         isFieldValid, getFieldError, getFieldSuccess, validateField,
         currentStep, totalSteps, handleNext, handleBack,
-        photo, cardPhoto, showImageOptions, setShowImageOptions, imageUploadMode, setImageUploadMode,
-        bgOffsetY, setBgOffsetY, bgOffsetX, setBgOffsetX, bgScale, setBgScale, bgFlipX, setBgFlipX, bgRotation, setBgRotation, isRemovingBg, isLibReady,
+        photo, showImageOptions, setShowImageOptions, imageUploadMode, setImageUploadMode,
+        isRemovingBg, isLibReady,
+        fighterLayers, addFighterLayer, removeFighterLayer, updateFighterLayer,
+        currentOffsetX, currentOffsetY, currentScale, currentRotation, currentFlipX,
+        updateOffsetX, updateOffsetY, updateScale, updateRotation, updateFlipX,
+
         adjustmentFocus, setAdjustmentFocus, stickerTransforms, setStickerTransforms,
         backgroundTemplates, borderTemplates, stickerTemplates, selectedBorder, setSelectedBorder, selectedBackground, setSelectedBackground, selectedStickers,
         handleRemoveBackground, launchCamera, launchGallery, pickProfilePhoto: () => { setImageUploadMode('profile'); setShowImageOptions(true); },
-        pickCardBackground: () => { setImageUploadMode('background'); setShowImageOptions(true); },
-        setCardBackgroundUrl: (url: string) => setSelectedBackground(url),
+        pickCardBackground: () => {
+            setImageUploadMode('background');
+            setShowImageOptions(true);
+        },
+        setCardBackgroundUrl: (url: string) => {
+            const isDeselecting = selectedBackground === url;
+            setSelectedBackground(prev => prev === url ? null : url);
+            setIsManualSelection(true); // Always stop banners when explicitly picking a background
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        },
         toggleSticker,
-        banners, currentBannerIndex,
+        banners, currentBannerIndex, isManualSelection,
+        isImageCropperVisible, setIsImageCropperVisible, pendingImageUri, handleImageCropConfirm,
         handleSubmit, showSuccessModal, successData, handleCloseSuccessModal,
         checkingAuth, existingFighter, showIdentityModal, setShowIdentityModal,
         isAutoLoggedIn, handleBlurField,
         fillDebugData, companyLogoUri,
         clearProfilePhoto: () => setPhoto(null),
         randomizeDesign: () => {
+            setIsManualSelection(true);
             if (backgroundTemplates.length > 0) {
                 const randBg = backgroundTemplates[Math.floor(Math.random() * backgroundTemplates.length)].url;
                 setSelectedBackground(randBg);
@@ -674,6 +885,22 @@ export const useFighterForm = () => {
                 const randBorder = borderTemplates[Math.floor(Math.random() * borderTemplates.length)].url;
                 setSelectedBorder(randBorder);
             }
-        }
+        },
+        toggleBorder: (url: string) => {
+            setIsManualSelection(true); // Stop auto-banners
+            setSelectedBorder(prev => prev === url ? null : url);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        },
+        resetDesign: () => {
+            setFighterLayers([]);
+            setSelectedBackground(null);
+            setSelectedBorder(null);
+            setSelectedStickers([]);
+            setStickerTransforms({});
+            setIsManualSelection(false);
+            setAdjustmentFocus('photo');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        lastImageSource
     };
 };

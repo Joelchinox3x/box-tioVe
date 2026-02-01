@@ -88,11 +88,11 @@ const styles = StyleSheet.create({
       android: { ...SHADOWS.lg, elevation: 8 },
       web: {
         boxShadow: '0 4px 8px rgba(255, 215, 0, 0.3)',
-        userSelect: 'none' as any,
-        WebkitUserSelect: 'none' as any,
-        pointerEvents: 'auto' as any,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        pointerEvents: 'auto',
         zIndex: 1,
-      },
+      } as any,
     }),
   },
   text: {

@@ -41,6 +41,7 @@ interface EpicFighterSuccessModalProps {
     stickerOffsetX?: number;
     stickerScale?: number;
     stickerRotation?: number;
+    fighterLayers?: any[];
 }
 
 export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = ({
@@ -62,7 +63,8 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
     stickerOffsetY = 0,
     stickerOffsetX = 0,
     stickerScale = 1,
-    stickerRotation = 0
+    stickerRotation = 0,
+    fighterLayers = []
 }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -194,11 +196,17 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
                                     backgroundScale={backgroundScale}
                                     backgroundResizeMode={backgroundResizeMode}
                                     companyLogoUri={companyLogoUri || fetchedLogo}
-                                    stickerUri={stickerUri}
-                                    stickerOffsetY={stickerOffsetY}
-                                    stickerOffsetX={stickerOffsetX}
-                                    stickerScale={stickerScale}
-                                    stickerRotation={stickerRotation}
+                                    selectedStickers={stickerUri ? [stickerUri] : []}
+                                    stickerTransforms={stickerUri ? {
+                                        [stickerUri]: {
+                                            x: stickerOffsetX,
+                                            y: stickerOffsetY,
+                                            scale: stickerScale,
+                                            rotation: stickerRotation,
+                                            flipX: false
+                                        }
+                                    } : {}}
+                                    fighterLayers={fighterLayers}
                                 />
                             </View>
 

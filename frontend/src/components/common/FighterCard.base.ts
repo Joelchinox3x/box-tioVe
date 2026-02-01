@@ -34,7 +34,7 @@ export const styles = StyleSheet.create({
         alignSelf: 'center',
         width: '50%',
         height: 50,
-        zIndex: 5,
+        zIndex: 50,
     },
     overlay: {
         flex: 1,

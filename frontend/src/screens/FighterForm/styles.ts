@@ -133,6 +133,34 @@ export const styles = StyleSheet.create({
         marginTop: SPACING.xs,
         maxWidth: 200,
     },
+    actionBtnCircle: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(255,100,100,0.8)', // Un color que resalte, o usar primary
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+        ...createShadow('#000', 0, 2, 0.3, 3, 3),
+    },
+    largeIconBtn: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 10,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        minWidth: 80,
+    },
+    largeIconText: {
+        marginTop: 8,
+        color: COLORS.text.primary,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+    },
     // ESTILOS PARA MODAL Y SELECTOR DE FOTOS
     modalOverlay: {
         flex: 1,

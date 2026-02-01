@@ -8,9 +8,14 @@ export const generateDNI = () => {
     return `${numbers}`;
 };
 
-const nombres = [
+const nombresMasculinos = [
     "Alejandro", "Mateo", "Lucas", "Daniel", "Javier", "Piero", "Carlos", "David", "Sergio", "Jorge",
     "Adrián", "Enrique", "Gabriel", "Samuel", "Álvaro", "Miguel", "Pablo", "Rubén", "Diego", "Mario"
+];
+
+const nombresFemeninos = [
+    "Sofia", "Camila", "Lucia", "Martina", "Valentina", "Antonella", "Valeria", "Mariana", "Isabella", "Fernanda",
+    "Jimena", "Paula", "Elena", "Andrea", "Renata", "Flavia", "Paola", "Ximena", "Lorena", "Claudia"
 ];
 
 const apellidos = [
@@ -18,30 +23,37 @@ const apellidos = [
     "Jiménez", "Ruiz", "Hernández", "Díaz", "Moreno", "Muñoz", "Álvarez", "Romero", "Alonso", "Gutiérrez"
 ];
 
-const apodos = ["La Roca", "El Toro", "Dinamita", "El Rayo", "Cobra", "Martillo", "Titán", "Viper", "El Muro", "Furia"];
+const apodosMasculinos = ["La Roca", "El Toro", "Dinamita", "El Rayo", "Cobra", "Martillo", "Titán", "Viper", "El Muro", "Furia"];
+const apodosFemeninos = ["La Diabla", "La Fiera", "Diamante", "Pantera", "Avispa", "Guerrera", "Amazona", "Estrella", "Tormenta", "Valquiria"];
 
 export const generateDebugFighter = () => {
-    const nombre = getRandomElement(nombres);
+    const isFemale = Math.random() > 0.5;
+    const genero = isFemale ? 'femenino' : 'masculino';
+
+    const nombresPool = isFemale ? nombresFemeninos : nombresMasculinos;
+    const apodosPool = isFemale ? apodosFemeninos : apodosMasculinos;
+
+    const primerNombre = getRandomElement(nombresPool);
+    const segundoNombre = getRandomElement(nombresPool);
     const apellido = getRandomElement(apellidos);
     const segundoApellido = getRandomElement(apellidos);
 
     // Generar email basado en nombre
-    const email = `${nombre.toLowerCase()}.${apellido.toLowerCase()}${getRandomNumber(1, 99)}@example.com`;
+    const email = `${primerNombre.toLowerCase()}.${apellido.toLowerCase()}${getRandomNumber(1, 99)}@example.com`;
 
     return {
-        nombre: `${nombre} ${getRandomElement(nombres)}`, // Dos nombres
+        nombre: `${primerNombre} ${segundoNombre}`, // Dos nombres
         apellidos: `${apellido} ${segundoApellido}`, // Dos apellidos
-        apodo: getRandomElement(apodos),
+        apodo: getRandomElement(apodosPool),
         dni: generateDNI(),
         email: email,
         edad: getRandomNumber(18, 45).toString(),
-        peso: getRandomNumber(55, 110).toString(),
-        altura: getRandomNumber(160, 200).toString(),
+        peso: isFemale ? getRandomNumber(48, 80).toString() : getRandomNumber(55, 110).toString(),
+        altura: isFemale ? getRandomNumber(150, 180).toString() : getRandomNumber(160, 200).toString(),
         // Celular Perú: 9 dígitos, empieza con 9
         telefono: `9${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}${getRandomNumber(0, 9)}`,
-        // Mantener valores por defecto del form para otros campos
-        genero: 'masculino',
+        genero: genero,
         countryCode: 'PE',
-        club_id: '' // El usuario debe seleccionar el club o se mantiene si ya eligió
+        club_id: ''
     };
 };
