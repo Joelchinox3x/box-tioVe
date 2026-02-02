@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { WebLayoutContainer } from './src/components/layout/WebLayoutContainer';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function App() {
   useEffect(() => {
@@ -37,8 +38,10 @@ export default function App() {
   }, []);
 
   return (
-    <WebLayoutContainer>
-      <AppNavigator />
-    </WebLayoutContainer>
+    <SafeAreaProvider>
+      <WebLayoutContainer>
+        <AppNavigator />
+      </WebLayoutContainer>
+    </SafeAreaProvider>
   );
 }

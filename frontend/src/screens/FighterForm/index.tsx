@@ -62,7 +62,7 @@ const FighterFormScreen = () => {
     // Actually, simple check:
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <StatusBar style="light" backgroundColor="#000" />
             <ScreenHeader title="EL JAB DORADO" subtitle="INSCRIPCIÓN DE PELEADOR" slogan="Únete a la élite del boxeo profesional" />
 

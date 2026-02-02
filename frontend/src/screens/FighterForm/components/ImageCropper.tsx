@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Modal, Image, Animated, StyleSheet, Dimensions, PanResponder, ActivityIndicator, Platform, Pressable, useWindowDimensions, ScrollView, UIManager } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, SHADOWS } from '../../../constants/theme';
 import { useBackgroundRemoval } from '../../../hooks/useBackgroundRemoval';
 import * as Haptics from 'expo-haptics';
@@ -47,6 +48,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
     const [currentImageUri, setCurrentImageUri] = useState<string | null>(imageUri);
     const [ready, setReady] = useState(false);
     const { removeBackground, isProcessing: isRemovingBg, isLibReady } = useBackgroundRemoval();
+    const insets = useSafeAreaInsets();
 
     // Dimensions
     const [imageSize, setImageSize] = useState<Size>({ width: 0, height: 0 });
@@ -285,9 +287,9 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <View style={styles.container}>
                 <View style={[styles.contentWrapper, Platform.OS === 'web' && { width: Math.min(WINDOW_WIDTH, 500), height: Math.min(WINDOW_HEIGHT, 850), borderRadius: 20, borderWidth: 1 }]}>
-                    <View style={styles.header}>
+                    <View style={[styles.header, { paddingTop: insets.top }]}>
                         <Text style={styles.headerTitle}>EDITAR IMAGEN</Text>
-                        <Pressable onPress={onClose} style={styles.closeBtn}>
+                        <Pressable onPress={onClose} style={[styles.closeBtn, { top: insets.top }]}>
                             <Ionicons name="close" size={24} color="#FFF" />
                         </Pressable>
                     </View>
@@ -362,7 +364,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                     </View>
 
                     {/* PREMIUM SLIM FOOTER */}
-                    <View style={styles.footerContainer}>
+                    <View style={[styles.footerContainer, { paddingBottom: Math.max(insets.bottom, 15) }]}>
                         {/* SELECTABLE PRESETS (Slim Pill Style) */}
                         <ScrollView
                             horizontal
@@ -482,7 +484,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' },
     contentWrapper: { width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 0, overflow: 'hidden', position: 'relative' },
-    header: { height: 60, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#222' },
+    header: { height: 100, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#222' },
     headerTitle: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '900', letterSpacing: 2 },
     closeBtn: { position: 'absolute', right: 20, top: 0, height: 60, justifyContent: 'center' },
 
