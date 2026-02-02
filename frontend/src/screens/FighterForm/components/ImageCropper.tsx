@@ -500,7 +500,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                 visible={showWebRemover}
                 imageUrl={tempImageUrl}
                 onClose={() => setShowWebRemover(false)}
-                onImageProcessed={(newUrl) => {
+                onImageProcessed={(newUrl: string) => {
                     setCurrentImageUri(newUrl);
                     setShowWebRemover(false);
                 }}

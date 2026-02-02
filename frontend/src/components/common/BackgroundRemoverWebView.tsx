@@ -9,7 +9,6 @@ interface BackgroundRemoverWebViewProps {
     visible: boolean;
     imageUrl: string | null;
     onClose: () => void;
-    onHistoryChange?: (canGoBack: boolean) => void;
     onImageProcessed: (newImageUrl: string) => void;
 }
 
@@ -24,19 +23,12 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
     const [loading, setLoading] = useState(true);
 
     // URL base de tu herramienta web
-    // MODIFICA ESTO con la URL real de tu página web que tiene el cropper
-    // Se le pasa ?img=... para que pre-cargue la imagen
     const BASE_WEB_URL = "https://boxtiove.com/tools/background-remover";
 
     const uri = imageUrl ? `${BASE_WEB_URL}?img=${encodeURIComponent(imageUrl)}&mode=embed` : BASE_WEB_URL;
 
-    // Inyectamos script para escuchar mensajes de la web (si la web envía postMessage)
     const INJECTED_JAVASCRIPT = `
       (function() {
-        // Escuchar eventos personalizados de tu web si usas window.postMessage
-        // Ejemplo: window.parent.postMessage({ type: 'IMAGE_PROCESSED', url: '...' }, '*')
-        
-        // Opcional: Interceptar clicks o eventos para comunicar a React Native
         window.isReactNative = true;
       })();
     `;
@@ -45,7 +37,6 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
         try {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === 'IMAGE_PROCESSED' && data.url) {
-                // La web nos devolvió la imagen lista
                 onImageProcessed(data.url);
             }
             if (data.type === 'CLOSE') {
@@ -59,12 +50,13 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
     if (!visible) return null;
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+        <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
             <View style={[styles.container, { backgroundColor: '#000' }]}>
+                <StatusBar barStyle="light-content" />
                 {/* Header Simple */}
-                <View style={[styles.header, { marginTop: Platform.OS === 'android' ? 0 : insets.top }]}>
-                    <Text style={styles.title}>Quitar Fondo (Web)</Text>
-                    <Pressable onPress={onClose} style={styles.closeBtn}>
+                <View style={[styles.header, { paddingTop: insets.top, height: 60 + insets.top }]}>
+                    <Text style={styles.title}>MAGIC ERASER PRO</Text>
+                    <Pressable onPress={onClose} style={[styles.closeBtn, { top: insets.top }]}>
                         <Ionicons name="close" size={26} color="#FFF" />
                     </Pressable>
                 </View>
@@ -80,16 +72,14 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
                         onLoadEnd={() => setLoading(false)}
                         injectedJavaScript={INJECTED_JAVASCRIPT}
                         onMessage={handleMessage}
-                        // Soporte para uploads en Android
                         allowFileAccess={true}
                         allowFileAccessFromFileURLs={true}
-                        allowingReadAccessToURL={Platform.OS === 'ios' ? '*' : undefined}
                     />
 
                     {loading && (
                         <View style={styles.loadingOverlay}>
                             <ActivityIndicator size="large" color={COLORS.primary} />
-                            <Text style={styles.loadingText}>Cargando herramienta...</Text>
+                            <Text style={styles.loadingText}>Iniciando Motor IA...</Text>
                         </View>
                     )}
                 </View>
@@ -101,8 +91,7 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 60,
-        backgroundColor: '#151515',
+        backgroundColor: '#111',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -110,14 +99,15 @@ const styles = StyleSheet.create({
         borderBottomColor: '#333'
     },
     title: {
-        color: '#FFF',
+        color: COLORS.primary,
         fontSize: 16,
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        letterSpacing: 1
     },
     closeBtn: {
         position: 'absolute',
         right: 15,
-        height: '100%',
+        height: 60,
         justifyContent: 'center',
         paddingHorizontal: 10
     },
