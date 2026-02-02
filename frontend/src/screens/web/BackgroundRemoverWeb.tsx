@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-// @ts-ignore
-import imglyRemoveBackground from "@imgly/background-removal";
+import { removeBackground } from "@imgly/background-removal";
 
 export default function BackgroundRemoverWeb() {
     const [status, setStatus] = useState('Esperando imagen...');
@@ -62,8 +61,8 @@ export default function BackgroundRemoverWeb() {
             // Configuración óptima para móviles
             const config = {
                 debug: true,
-                model: 'small', // Modelo ligero
-                output: { format: 'image/png', quality: 0.8 },
+                model: 'isnet_fp16', // Modelo ligero standard
+                output: { format: 'image/png' as const, quality: 0.8 },
                 progress: (key: string, current: number, total: number) => {
                     // key: 'fetch' | 'compute'
                     const p = Math.round((current / total) * 100);
@@ -72,7 +71,7 @@ export default function BackgroundRemoverWeb() {
                 }
             };
 
-            const blob = await imglyRemoveBackground(imageSrc, config);
+            const blob = await removeBackground(imageSrc, config);
 
             setStatus('Finalizando...');
             // Convertir Blob a Base64 para devolver a la App
