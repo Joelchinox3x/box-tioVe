@@ -35,12 +35,13 @@ export const useBackgroundRemoval = () => {
             // Native Strategy: Open external tool
             Alert.alert(
                 "Remover Fondo (Versión Web)",
-                "Para la mejor calidad, te abriremos una herramienta externa (Adobe/Remove.bg). Guarda la foto sin fondo en tu galería y vuelve a seleccionarla aquí.",
+                "Para eliminar el fondo usando tu propia tecnología Web, abriremos tu aplicación en el navegador. (Nota: Selecciona la foto nuevamente en la web).",
                 [
                     { text: "Cancelar", style: "cancel" },
                     {
-                        text: "Abrir Herramienta",
-                        onPress: () => Linking.openURL("https://www.adobe.com/express/feature/image/remove-background")
+                        text: "Abrir Mi Web",
+                        // TODO: Reemplaza esta URL con la ruta exacta de tu versión web (ej: https://boxtiove.com/herramientas/cropper)
+                        onPress: () => Linking.openURL("https://boxtiove.com")
                     }
                 ]
             );
