@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Linking, Alert } from 'react-native';
 
 export const useBackgroundRemoval = () => {
     const [isLibReady, setIsLibReady] = useState(false);
@@ -30,6 +30,23 @@ export const useBackgroundRemoval = () => {
 
     const removeBackground = async (uri: string): Promise<string | null> => {
         if (!uri) return null;
+
+        if (Platform.OS !== 'web') {
+            // Native Strategy: Open external tool
+            Alert.alert(
+                "Remover Fondo (Versión Web)",
+                "Para la mejor calidad, te abriremos una herramienta externa (Adobe/Remove.bg). Guarda la foto sin fondo en tu galería y vuelve a seleccionarla aquí.",
+                [
+                    { text: "Cancelar", style: "cancel" },
+                    {
+                        text: "Abrir Herramienta",
+                        onPress: () => Linking.openURL("https://www.adobe.com/express/feature/image/remove-background")
+                    }
+                ]
+            );
+            return null;
+        }
+
         setIsProcessing(true);
         try {
             const imgly = (window as any).imglyBackgroundRemoval;
