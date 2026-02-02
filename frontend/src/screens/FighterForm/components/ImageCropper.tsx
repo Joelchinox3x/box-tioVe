@@ -13,6 +13,7 @@ import {
     saturate,
     brightness
 } from 'react-native-color-matrix-image-filters';
+import { BackgroundRemoverModal } from '../../../components/common/BackgroundRemoverModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -49,6 +50,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
     const [ready, setReady] = useState(false);
     const { removeBackground, isProcessing: isRemovingBg, isLibReady } = useBackgroundRemoval();
     const insets = useSafeAreaInsets();
+    const [showMagicEraser, setShowMagicEraser] = useState(false);
 
     // Dimensions
     const [imageSize, setImageSize] = useState<Size>({ width: 0, height: 0 });
@@ -275,6 +277,12 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 
     const handleRemoveBg = async () => {
         if (!currentImageUri) return;
+
+        if (Platform.OS !== 'web') {
+            setShowMagicEraser(true);
+            return;
+        }
+
         try {
             const result = await removeBackground(currentImageUri);
             setCurrentImageUri(result);
@@ -477,7 +485,21 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                     </View>
                 </View>
             </View>
-        </Modal>
+
+            {/* NATIVE MAGIC ERASER MODAL */}
+            {
+                Platform.OS !== 'web' && (
+                    <BackgroundRemoverModal
+                        visible={showMagicEraser}
+                        imageUri={currentImageUri}
+                        onClose={() => setShowMagicEraser(false)}
+                        onSuccess={(newUri) => {
+                            setCurrentImageUri(newUri);
+                        }}
+                    />
+                )
+            }
+        </Modal >
     );
 };
 
