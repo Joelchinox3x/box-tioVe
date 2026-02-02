@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Modal, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { View, Modal, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform, StatusBar, UIManager, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,15 @@ export const BackgroundRemoverModal: React.FC<Props> = ({ visible, imageUri, onC
     const WEB_URL = __DEV__
         ? 'http://10.0.2.2:8080/ia/remover' // Android Emulator Host
         : 'https://boxtiove.com/ia/remover';
+
+    // Safety Check for Expo Go (WebView Native Module presence)
+    // @ts-ignore
+    const isWebViewAvailable = !!(UIManager.getViewManagerConfig('RNCWebView'));
+
+    const handleOpenBrowser = () => {
+        Linking.openURL(WEB_URL);
+        onClose();
+    };
 
     const handleLoadEnd = async () => {
         if (!imageUri) return;
@@ -92,27 +101,45 @@ export const BackgroundRemoverModal: React.FC<Props> = ({ visible, imageUri, onC
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.statusContainer}>
-                    <Text style={styles.statusText}>{status}</Text>
-                    {status.includes('Error') && (
-                        <TouchableOpacity onPress={onClose} style={{ marginTop: 10 }}>
-                            <Text style={{ color: COLORS.error }}>Cerrar</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
+                {isWebViewAvailable ? (
+                    <>
+                        <View style={styles.statusContainer}>
+                            <Text style={styles.statusText}>{status}</Text>
+                            {status.includes('Error') && (
+                                <TouchableOpacity onPress={onClose} style={{ marginTop: 10 }}>
+                                    <Text style={{ color: COLORS.error }}>Cerrar</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
 
-                <WebView
-                    ref={webViewRef}
-                    source={{ uri: WEB_URL }}
-                    style={{ flex: 1, backgroundColor: '#000' }}
-                    containerStyle={{ backgroundColor: '#000' }}
-                    onLoadEnd={handleLoadEnd}
-                    onMessage={handleMessage}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    startInLoadingState={true}
-                    renderLoading={() => <ActivityIndicator size="large" color={COLORS.primary} style={{ position: 'absolute', top: '50%', left: '50%' }} />}
-                />
+                        <WebView
+                            ref={webViewRef}
+                            source={{ uri: WEB_URL }}
+                            style={{ flex: 1, backgroundColor: '#000' }}
+                            containerStyle={{ backgroundColor: '#000' }}
+                            onLoadEnd={handleLoadEnd}
+                            onMessage={handleMessage}
+                            javaScriptEnabled={true}
+                            domStorageEnabled={true}
+                            startInLoadingState={true}
+                            renderLoading={() => <ActivityIndicator size="large" color={COLORS.primary} style={{ position: 'absolute', top: '50%', left: '50%' }} />}
+                        />
+                    </>
+                ) : (
+                    <View style={styles.fallbackContainer}>
+                        <Ionicons name="alert-circle-outline" size={60} color={COLORS.primary} />
+                        <Text style={styles.fallbackTitle}>Expo Go Detectado</Text>
+                        <Text style={styles.fallbackText}>
+                            La tecnología "In-App WebView" requiere una Build de Desarrollo.
+                            En Expo Go, usaremos el navegador externo.
+                        </Text>
+                        <TouchableOpacity style={styles.fallbackBtn} onPress={handleOpenBrowser}>
+                            <Text style={styles.fallbackBtnText}>Abrir en Navegador</Text>
+                            <Ionicons name="open-outline" size={20} color="#000" />
+                        </TouchableOpacity>
+                        <Text style={styles.fallbackNote}>Nota: Deberás guardar la imagen y volver a seleccionarla.</Text>
+                    </View>
+                )}
             </View>
         </Modal>
     );
@@ -140,5 +167,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         pointerEvents: 'none'
     },
-    statusText: { color: '#FFF', textShadowColor: '#000', textShadowRadius: 3, fontWeight: '600' }
+    statusText: { color: '#FFF', textShadowColor: '#000', textShadowRadius: 3, fontWeight: '600' },
+    fallbackContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30, gap: 20 },
+    fallbackTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginTop: 10 },
+    fallbackText: { color: '#BBB', fontSize: 16, textAlign: 'center', lineHeight: 24 },
+    fallbackBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, paddingVertical: 15, paddingHorizontal: 30, borderRadius: 25, alignItems: 'center', gap: 10, marginTop: 20 },
+    fallbackBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+    fallbackNote: { color: '#666', fontSize: 12, marginTop: 20, textAlign: 'center' }
 });
