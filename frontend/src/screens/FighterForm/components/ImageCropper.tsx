@@ -494,18 +494,17 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                     </View>
                 </View>
             </View>
-        </View>
-            
-            {/* WEBVIEW PROCESSOR */ }
-    <BackgroundRemoverWebView
-        visible={showWebRemover}
-        imageUrl={tempImageUrl}
-        onClose={() => setShowWebRemover(false)}
-        onImageProcessed={(newUrl) => {
-            setCurrentImageUri(newUrl);
-            setShowWebRemover(false);
-        }}
-    />
+
+            {/* WEBVIEW PROCESSOR */}
+            <BackgroundRemoverWebView
+                visible={showWebRemover}
+                imageUrl={tempImageUrl}
+                onClose={() => setShowWebRemover(false)}
+                onImageProcessed={(newUrl) => {
+                    setCurrentImageUri(newUrl);
+                    setShowWebRemover(false);
+                }}
+            />
         </Modal >
     );
 };
