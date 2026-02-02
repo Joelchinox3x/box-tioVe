@@ -55,18 +55,7 @@
         }
       ],
       "expo-font",
-      "expo-asset",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "kotlinVersion": "2.1.0",
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0"
-          }
-        }
-      ]
+      "expo-asset"
     ]
   }
 }
