@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, SHADOWS } from '../../../constants/theme';
 import { useBackgroundRemoval } from '../../../hooks/useBackgroundRemoval';
+import { BackgroundRemoverWebView } from '../../../components/common/BackgroundRemoverWebView';
 import * as Haptics from 'expo-haptics';
 import {
     ColorMatrix,
@@ -13,7 +14,6 @@ import {
     saturate,
     brightness
 } from 'react-native-color-matrix-image-filters';
-import { BackgroundRemoverModal } from '../../../components/common/BackgroundRemoverModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -48,9 +48,12 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
     // State
     const [currentImageUri, setCurrentImageUri] = useState<string | null>(imageUri);
     const [ready, setReady] = useState(false);
-    const { removeBackground, isProcessing: isRemovingBg, isLibReady } = useBackgroundRemoval();
+    const { removeBackground, uploadToTempServer, isProcessing: isRemovingBg, isLibReady } = useBackgroundRemoval();
     const insets = useSafeAreaInsets();
-    const [showMagicEraser, setShowMagicEraser] = useState(false);
+
+    // WebView Modal State
+    const [showWebRemover, setShowWebRemover] = useState(false);
+    const [tempImageUrl, setTempImageUrl] = useState<string | null>(null);
 
     // Dimensions
     const [imageSize, setImageSize] = useState<Size>({ width: 0, height: 0 });
@@ -278,15 +281,21 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
     const handleRemoveBg = async () => {
         if (!currentImageUri) return;
 
-        if (Platform.OS !== 'web') {
-            setShowMagicEraser(true);
-            return;
+        if (Platform.OS === 'web') {
+            try {
+                const result = await removeBackground(currentImageUri);
+                setCurrentImageUri(result);
+            } catch (error) { console.log('Bg removal error:', error); }
+        } else {
+            // NATIVE STRATEGY: Upload -> WebView
+            const url = await uploadToTempServer(currentImageUri);
+            if (url) {
+                setTempImageUrl(url);
+                setShowWebRemover(true);
+            } else {
+                alert("Error subiendo imagen temporal");
+            }
         }
-
-        try {
-            const result = await removeBackground(currentImageUri);
-            setCurrentImageUri(result);
-        } catch (error) { console.log('Bg removal error:', error); }
     };
 
     if (!visible) return null;
@@ -485,20 +494,18 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                     </View>
                 </View>
             </View>
-
-            {/* NATIVE MAGIC ERASER MODAL */}
-            {
-                Platform.OS !== 'web' && (
-                    <BackgroundRemoverModal
-                        visible={showMagicEraser}
-                        imageUri={currentImageUri}
-                        onClose={() => setShowMagicEraser(false)}
-                        onSuccess={(newUri) => {
-                            setCurrentImageUri(newUri);
-                        }}
-                    />
-                )
-            }
+        </View>
+            
+            {/* WEBVIEW PROCESSOR */ }
+    <BackgroundRemoverWebView
+        visible={showWebRemover}
+        imageUrl={tempImageUrl}
+        onClose={() => setShowWebRemover(false)}
+        onImageProcessed={(newUrl) => {
+            setCurrentImageUri(newUrl);
+            setShowWebRemover(false);
+        }}
+    />
         </Modal >
     );
 };

@@ -261,6 +261,21 @@ try {
             }
             break;
 
+        // ========== SUBIDA TEMPORAL (APP -> WEB) ==========
+        case 'temp-upload':
+            require_once __DIR__ . '/../controllers/TempUploadController.php';
+            $controller = new TempUploadController();
+
+            if ($method === 'POST') {
+                // POST /api/temp-upload
+                // Detectar si files viene en $_FILES (multipart)
+                echo json_encode($controller->upload($_FILES));
+            } else {
+                http_response_code(405);
+                echo json_encode(["error" => "Método no permitido"]);
+            }
+            break;
+
         // ========== BANNERS (DINÁMICO) ==========
         case 'banners':
             require_once __DIR__ . '/../controllers/BannersController.php';
