@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Platform, Linking, Alert } from 'react-native';
+import { Config } from '../config/config';
 
 export const useBackgroundRemoval = () => {
     const [isLibReady, setIsLibReady] = useState(false);
@@ -40,8 +41,8 @@ export const useBackgroundRemoval = () => {
                     { text: "Cancelar", style: "cancel" },
                     {
                         text: "Abrir Mi Web",
-                        // TODO: Reemplaza esta URL con la ruta exacta de tu versión web (ej: https://boxtiove.com/herramientas/cropper)
-                        onPress: () => Linking.openURL("https://boxtiove.com")
+                        // TODO: Reemplaza esta URL con la ruta exacta de tu versión web
+                        onPress: () => Linking.openURL(Config.BASE_URL)
                     }
                 ]
             );
@@ -84,8 +85,8 @@ export const useBackgroundRemoval = () => {
 
             formData.append('image', { uri: cleanUri, name: filename, type } as any);
 
-            // POST al endpoint nuevo que creamos
-            const response = await fetch('https://boxtiove.com/api/temp-upload', {
+            // POST al endpoint desde configuración centralizada
+            const response = await fetch(Config.TEMP_UPLOAD_ENDPOINT, {
                 method: 'POST',
                 body: formData,
                 headers: {

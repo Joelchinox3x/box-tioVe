@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants/theme';
 import api from '../services/api';
+import AnunciosSummary from '../components/AnunciosSummary';
 import type { EventData } from '../types';
 
 interface EventScreenProps {
@@ -103,6 +104,7 @@ export default function EventScreen({ navigation }: EventScreenProps) {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
+                          timeZone: 'UTC',
                         });
 
                         // Agregar hora si existe
@@ -154,6 +156,13 @@ export default function EventScreen({ navigation }: EventScreenProps) {
                 <Text style={styles.statLabel}>Peleadores</Text>
               </View>
             </View>
+
+            {/* Anuncios */}
+            <AnunciosSummary
+              eventoId={evento.id}
+              maxItems={3}
+              onViewAll={() => navigation.navigate('Anuncios', { eventoId: evento.id })}
+            />
 
             {/* Botón de compra */}
             <TouchableOpacity

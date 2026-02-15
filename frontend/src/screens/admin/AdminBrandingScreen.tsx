@@ -66,7 +66,7 @@ export default function AdminBrandingScreen() {
 
     const handlePickImage = async (type: LogoType) => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: type === 'header' ? [3, 1] : [1, 1],
             quality: 1,

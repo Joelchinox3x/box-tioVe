@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity, Dimensions, ImageBackground, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity, Dimensions, ImageBackground, Platform, Linking, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { createShadow, createTextShadow } from '../utils/shadows';
 import { FighterCard } from './common/FighterCard';
-import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AdminService } from '../services/AdminService';
 
 const { width } = Dimensions.get('window');
@@ -24,6 +24,7 @@ interface EpicFighterSuccessModalProps {
         edad?: string;
         altura?: string;
         clubName?: string;
+        bakedUrl?: string | null;
     };
     email: string;
     dni: string;
@@ -68,7 +69,6 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
 }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
-    const cardRef = useRef<View>(null);
 
     useEffect(() => {
         if (visible) {
@@ -112,36 +112,61 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
     const handleShare = async () => {
         try {
             if (Platform.OS === 'web') {
-                const message = `¡Ya soy un peleador oficial de Box TioVE! 🥊\n\nNombre: ${fighterData.nombre} "${fighterData.apodo || ''}" ${fighterData.apellidos}\nPeso: ${fighterData.peso}kg\nClub: ${fighterData.clubName || 'Independiente'}\n\n¡Nos vemos en el ring! 🔥`;
+                const toHdUrl = (url: string) => {
+                    const clean = url.split('?')[0];
+                    if (clean.endsWith('.png')) {
+                        return url.replace(/\.png(\?.*)?$/, '_HD.png$1');
+                    }
+                    return url;
+                };
+                const hdUrl = fighterData.bakedUrl ? toHdUrl(fighterData.bakedUrl) : '';
+                const message = `¡Ya soy un peleador oficial de Box TioVE! 🥊\n\nNombre: ${fighterData.nombre} "${fighterData.apodo || ''}" ${fighterData.apellidos}\nPeso: ${fighterData.peso}kg\nClub: ${fighterData.clubName || 'Independiente'}\n\nMi tarjeta HD: ${hdUrl || 'Pendiente'}\n\n¡Nos vemos en el ring! 🔥`;
                 window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
                 return;
             }
 
-            // 1. Capturar la vista como imagen
-            // Para asegurar que view-shot capture los estilos transformados, a veces necesita collapsable=false (ya puesto)
-            const uri = await captureRef(cardRef, {
-                format: 'png',
-                quality: 1,
-                result: 'tmpfile'
-            });
+            let uriToShare = '';
 
-            console.log("📸 Imagen capturada:", uri);
+            if (fighterData.bakedUrl) {
+                const toHdUrl = (url: string) => {
+                    const clean = url.split('?')[0];
+                    if (clean.endsWith('.png')) {
+                        return url.replace(/\.png(\?.*)?$/, '_HD.png$1');
+                    }
+                    return url;
+                };
 
-            // 2. Verificar si se puede compartir
-            if (!(await Sharing.isAvailableAsync())) {
-                alert('El compartir no está disponible en este dispositivo');
+                console.log("📥 Descargando imagen quemada para compartir...");
+                const filename = `fighter_card_${Date.now()}.png`;
+                const downloadPath = `${FileSystem.cacheDirectory}${filename}`;
+
+                const hdUrl = toHdUrl(fighterData.bakedUrl);
+                try {
+                    const downloadResult = await FileSystem.downloadAsync(
+                        hdUrl,
+                        downloadPath
+                    );
+                    uriToShare = downloadResult.uri;
+                } catch (e) {
+                    const downloadResult = await FileSystem.downloadAsync(
+                        fighterData.bakedUrl,
+                        downloadPath
+                    );
+                    uriToShare = downloadResult.uri;
+                }
+            } else {
+                Alert.alert('Aviso', 'Tu tarjeta aún se está procesando. Por favor, intenta compartirla en unos momentos desde tu perfil.');
                 return;
             }
 
-            // 3. Compartir la imagen
-            await Sharing.shareAsync(uri, {
-                mimeType: 'image/png',
-                dialogTitle: 'Compartir mi Ficha de Peleador',
-                UTI: 'image/png'
-            });
-
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uriToShare);
+            } else {
+                alert('El compartir no está disponible en este dispositivo');
+            }
         } catch (error) {
             console.error("Error al compartir imagen:", error);
+            alert('No se pudo generar la imagen para compartir');
         }
     };
 
@@ -173,41 +198,56 @@ export const EpicFighterSuccessModal: React.FC<EpicFighterSuccessModalProps> = (
                             <Text style={styles.title}>{title}</Text>
 
                             <View
-                                ref={cardRef}
-                                collapsable={false}
                                 style={styles.cardContainer}
                             >
-                                <FighterCard
-                                    fighter={{
-                                        nombre: fighterData.nombre,
-                                        apellidos: fighterData.apellidos,
-                                        apodo: fighterData.apodo,
-                                        peso: fighterData.peso,
-                                        genero: fighterData.genero,
-                                        photoUri: fighterData.photoUri,
-                                        edad: fighterData.edad,
-                                        altura: fighterData.altura,
-                                        clubName: fighterData.clubName
-                                    }}
-                                    variant="large"
-                                    onShare={handleShare}
-                                    backgroundOffsetY={backgroundOffsetY}
-                                    backgroundOffsetX={backgroundOffsetX}
-                                    backgroundScale={backgroundScale}
-                                    backgroundResizeMode={backgroundResizeMode}
-                                    companyLogoUri={companyLogoUri || fetchedLogo}
-                                    selectedStickers={stickerUri ? [stickerUri] : []}
-                                    stickerTransforms={stickerUri ? {
-                                        [stickerUri]: {
-                                            x: stickerOffsetX,
-                                            y: stickerOffsetY,
-                                            scale: stickerScale,
-                                            rotation: stickerRotation,
-                                            flipX: false
-                                        }
-                                    } : {}}
-                                    fighterLayers={fighterLayers}
-                                />
+                                {fighterData.bakedUrl ? (
+                                    <View style={styles.bakedCardWrapper}>
+                                        <ImageBackground
+                                            source={{ uri: fighterData.bakedUrl }}
+                                            style={styles.bakedImage}
+                                            imageStyle={{ borderRadius: 12 }}
+                                            resizeMode="contain"
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.shareOverlay}
+                                            onPress={handleShare}
+                                        >
+                                            <Ionicons name="share-social" size={24} color="#FFD700" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <FighterCard
+                                        fighter={{
+                                            nombre: fighterData.nombre,
+                                            apellidos: fighterData.apellidos,
+                                            apodo: fighterData.apodo,
+                                            peso: fighterData.peso,
+                                            genero: fighterData.genero,
+                                            photoUri: fighterData.photoUri,
+                                            edad: fighterData.edad,
+                                            altura: fighterData.altura,
+                                            clubName: fighterData.clubName
+                                        }}
+                                        variant="large"
+                                        onShare={handleShare}
+                                        backgroundOffsetY={backgroundOffsetY}
+                                        backgroundOffsetX={backgroundOffsetX}
+                                        backgroundScale={backgroundScale}
+                                        backgroundResizeMode={backgroundResizeMode}
+                                        companyLogoUri={companyLogoUri || fetchedLogo}
+                                        selectedStickers={stickerUri ? [stickerUri] : []}
+                                        stickerTransforms={stickerUri ? {
+                                            [stickerUri]: {
+                                                x: stickerOffsetX,
+                                                y: stickerOffsetY,
+                                                scale: stickerScale,
+                                                rotation: stickerRotation,
+                                                flipX: false
+                                            }
+                                        } : {}}
+                                        fighterLayers={fighterLayers}
+                                    />
+                                )}
                             </View>
 
                             {!isAlreadyAuth && (
@@ -274,7 +314,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.9)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: SPACING.lg,
+        paddingVertical: SPACING.lg,
     },
     content: {
         width: '100%',
@@ -289,7 +329,8 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     gradient: {
-        padding: SPACING.xl,
+        paddingVertical: SPACING.xl,
+        paddingHorizontal: 0,
         alignItems: 'center',
         gap: SPACING.md,
     },
@@ -300,17 +341,39 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         textAlign: 'center',
         marginBottom: SPACING.sm,
+        paddingHorizontal: SPACING.xl,
         ...createTextShadow('rgba(0,0,0,0.5)', 2, 2, 5),
     },
     cardContainer: {
         width: '100%',
-        transform: [{ scale: 0.95 }],
+    },
+    bakedCardWrapper: {
+        width: '100%',
+        aspectRatio: 1.9, // Mismo que la card estándar
+        backgroundColor: '#1a1a1a',
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.3)',
+        ...SHADOWS.md,
+    },
+    bakedImage: {
+        width: '100%',
+        height: '100%',
+    },
+    shareOverlay: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 8,
+        borderRadius: BORDER_RADIUS.full,
     },
     credentialsContainer: {
         backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: BORDER_RADIUS.md,
         padding: SPACING.md,
-        width: '100%',
+        width: '90%', // Reduce width to have margins
         marginTop: SPACING.xs,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
@@ -324,7 +387,7 @@ const styles = StyleSheet.create({
     credentialLabel: {
         color: COLORS.text.secondary,
         fontSize: 14,
-        width: 80,
+        width: 100,
     },
     credentialValue: {
         color: '#FFF',
@@ -353,9 +416,10 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontStyle: 'italic',
         marginTop: SPACING.xs,
+        paddingHorizontal: SPACING.xl,
     },
     button: {
-        width: '100%',
+        width: '90%',
         marginTop: SPACING.md,
     },
     buttonGradient: {

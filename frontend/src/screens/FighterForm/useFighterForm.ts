@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
-import { Alert, LayoutChangeEvent, Platform } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Alert, LayoutChangeEvent, Platform, View } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { captureRef } from 'react-native-view-shot';
 
 import { fighterService } from '../../services/fighterService';
 import { clubService, Club } from '../../services/clubService';
@@ -17,6 +18,7 @@ import api from '../../services/api';
 import { generateDebugFighter } from '../../data/dummyFighters';
 import { AdminService } from '../../services/AdminService';
 import { useBackgroundRemoval } from '../../hooks/useBackgroundRemoval';
+import { Config, toAbsoluteUrl } from '../../config/config';
 
 export interface FighterLayer {
     id: string;
@@ -31,9 +33,10 @@ export interface FighterLayer {
     preset?: string;
     effect?: string;
     effectColor?: string;
+    originalUri?: string; // New: Store original for non-destructive edits
 }
 
-export const useFighterForm = () => {
+export const useFighterForm = (fighterCardRef?: React.RefObject<View>) => {
     const navigation = useNavigation();
     const scrollViewRef = useRef<KeyboardAwareScrollView>(null);
     const fieldPositions = useRef<{ [key: string]: number }>({});
@@ -62,10 +65,12 @@ export const useFighterForm = () => {
         club_id: 'club'
     };
 
-    const [formData, setFormData] = useState<FormData>({
+    const initialFormData: FormData = {
         nombre: '', apellidos: '', apodo: '', edad: '', peso: '', altura: '',
         genero: 'masculino', email: '', telefono: '', countryCode: 'PE', dni: '', club_id: '',
-    });
+    };
+
+    const [formData, setFormData] = useState<FormData>(initialFormData);
 
     const [focusedField, setFocusedField] = useState<string | null>(null);
     const [errors, setErrors] = useState<FormErrors>({});
@@ -169,7 +174,8 @@ export const useFighterForm = () => {
     // Unified Update Helpers (Proxies to updateFighterLayer or StickerTransforms)
     // Unified Updates for Layers AND Stickers
     const updateOffsetX = (val: number | ((prev: number) => number)) => {
-        if (adjustmentFocus.startsWith('layer-')) {
+        const isLayer = fighterLayers.some(l => l.id === adjustmentFocus);
+        if (isLayer) {
             setFighterLayers(prev => prev.map(l => {
                 if (l.id !== adjustmentFocus) return l;
                 const newVal = typeof val === 'function' ? val(l.x) : val;
@@ -187,7 +193,8 @@ export const useFighterForm = () => {
     };
 
     const updateOffsetY = (val: number | ((prev: number) => number)) => {
-        if (adjustmentFocus.startsWith('layer-')) {
+        const isLayer = fighterLayers.some(l => l.id === adjustmentFocus);
+        if (isLayer) {
             setFighterLayers(prev => prev.map(l => {
                 if (l.id !== adjustmentFocus) return l;
                 const newVal = typeof val === 'function' ? val(l.y) : val;
@@ -205,7 +212,8 @@ export const useFighterForm = () => {
     };
 
     const updateScale = (val: number | ((prev: number) => number)) => {
-        if (adjustmentFocus.startsWith('layer-')) {
+        const isLayer = fighterLayers.some(l => l.id === adjustmentFocus);
+        if (isLayer) {
             setFighterLayers(prev => prev.map(l => {
                 if (l.id !== adjustmentFocus) return l;
                 const newVal = typeof val === 'function' ? val(l.scale) : val;
@@ -223,7 +231,8 @@ export const useFighterForm = () => {
     };
 
     const updateRotation = (val: number | ((prev: number) => number)) => {
-        if (adjustmentFocus.startsWith('layer-')) {
+        const isLayer = fighterLayers.some(l => l.id === adjustmentFocus);
+        if (isLayer) {
             setFighterLayers(prev => prev.map(l => {
                 if (l.id !== adjustmentFocus) return l;
                 const newVal = typeof val === 'function' ? val(l.rotation) : val;
@@ -241,7 +250,8 @@ export const useFighterForm = () => {
     };
 
     const updateFlipX = (val: boolean | ((prev: boolean) => boolean)) => {
-        if (adjustmentFocus.startsWith('layer-')) {
+        const isLayer = fighterLayers.some(l => l.id === adjustmentFocus);
+        if (isLayer) {
             setFighterLayers(prev => prev.map(l => {
                 if (l.id !== adjustmentFocus) return l;
                 const newVal = typeof val === 'function' ? val(l.flipX) : val;
@@ -277,19 +287,27 @@ export const useFighterForm = () => {
         } catch (error) { console.log('Error playing sound:', error); }
     };
 
-    // EFFECTS
-    useEffect(() => {
-        loadClubs();
-        checkAuthStatus();
-        loadBanners();
-        loadTemplates(); // Load templates too
-        loadBranding();
-    }, []);
+    // EFFECTS - Re-run on every screen focus (Tab Navigator keeps screens alive)
+    useFocusEffect(
+        useCallback(() => {
+            setCheckingAuth(true);
+            setCurrentStep(1);
+            setExistingFighter(null);
+            setShowIdentityModal(false);
+            loadClubs();
+            checkAuthStatus();
+            loadBanners();
+            loadTemplates();
+            loadBranding();
+        }, [])
+    );
 
     useEffect(() => {
-        if (banners.length <= 1 || isManualSelection) return;
-        const interval = setInterval(() => setCurrentBannerIndex(prev => (prev + 1) % banners.length), 5000);
-        return () => clearInterval(interval);
+        if (banners.length === 0 || isManualSelection) return;
+        // Al entrar, mostrar un banner aleatorio una sola vez (sin rotación automática)
+        const randomIndex = Math.floor(Math.random() * banners.length);
+        setCurrentBannerIndex(randomIndex);
+        setSelectedBackground(banners[randomIndex].url);
     }, [banners, isManualSelection]);
 
     // Restore Default Banner Background Behavior
@@ -327,6 +345,7 @@ export const useFighterForm = () => {
     }, [formData.dni]);
 
     useEffect(() => {
+        if (isAlreadyAuth) return;
         const timeoutId = setTimeout(async () => {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (emailRegex.test(formData.email)) {
@@ -339,7 +358,7 @@ export const useFighterForm = () => {
             }
         }, 800);
         return () => clearTimeout(timeoutId);
-    }, [formData.email]);
+    }, [formData.email, isAlreadyAuth]);
 
     const loadTemplates = async () => {
         const bgs = await cardTemplateService.getBackgrounds();
@@ -371,13 +390,59 @@ export const useFighterForm = () => {
         try {
             const token = await AsyncStorage.getItem('token');
             const userStr = await AsyncStorage.getItem('user');
-            if (token && userStr) {
-                setIsAlreadyAuth(true);
-                const user = JSON.parse(userStr);
-                try {
-                    const fighterData = await fighterService.getByUserId(user.id);
-                    if (fighterData) setExistingFighter(fighterData);
-                } catch (err) { console.log('User logged in but not fighter'); }
+            if (!token || !userStr) {
+                setIsAlreadyAuth(false);
+                setIsAutoLoggedIn(false);
+                setExistingFighter(null);
+                setFormData(initialFormData);
+                setPhoto(null);
+                setFighterLayers([]);
+                setSelectedBackground(null);
+                setSelectedBorder(null);
+                setSelectedStickers([]);
+                setStickerTransforms({});
+                setCheckingAuth(false);
+                return;
+            }
+            setIsAlreadyAuth(true);
+            const user = JSON.parse(userStr);
+            console.log('👤 [AUTH] Usuario logueado:', { id: user.id, nombre: user.nombre, tipo_id: user.tipo_id });
+
+            // Verificar si ya es peleador
+            let isFighter = false;
+            try {
+                const response = await fighterService.getByUserId(user.id);
+                if (response.success && response.peleador) {
+                    setExistingFighter(response.peleador);
+                    isFighter = true;
+                }
+            } catch (err) {
+                console.log('👤 [AUTH] No es peleador, preparando pre-llenado...');
+            }
+
+            // Si NO es peleador → pre-llenar form con datos existentes
+            if (!isFighter) {
+                const phoneRaw = (user.telefono || '').replace(/\D/g, '');
+                const phoneClean = phoneRaw.replace(/^(51|54|52|1)/, '');
+
+                console.log('📝 [PREFILL] Datos:', { nombre: user.nombre, apellidos: user.apellidos, email: user.email, telefono: phoneClean });
+
+                setFormData(prev => ({
+                    ...prev,
+                    nombre: user.nombre || prev.nombre,
+                    apellidos: user.apellidos || prev.apellidos,
+                    email: user.email || prev.email,
+                    telefono: phoneClean || prev.telefono,
+                    club_id: user.club_id || prev.club_id,
+                }));
+
+                if (user.foto_perfil) {
+                    const photoUrl = user.foto_perfil.startsWith('http')
+                        ? user.foto_perfil
+                        : `${Config.BASE_URL}/${user.foto_perfil}`;
+                    setPhoto({ uri: photoUrl, name: 'foto_perfil.jpg', type: 'image/jpeg' });
+                    console.log('📷 [PREFILL] Foto cargada:', photoUrl);
+                }
             }
         } catch (e) { console.error('Auth check error', e); } finally { setCheckingAuth(false); }
     };
@@ -637,7 +702,7 @@ export const useFighterForm = () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') return Alert.alert('Error', 'Se requiere cámara');
         const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: false,
             quality: 0.8,
         });
@@ -658,7 +723,7 @@ export const useFighterForm = () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return Alert.alert('Error', 'Se requiere galería');
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: false,
             quality: 0.8,
         });
@@ -675,17 +740,64 @@ export const useFighterForm = () => {
         }
     };
 
-    const handleImageCropConfirm = async (croppedUri: string, preset: string = 'original', effect: string = 'none', effectColor: string = '#00FFFF') => {
+    const handleImageCropConfirm = async (result: string | any[], preset: string = 'original', effect: string = 'none', effectColor: string = '#00FFFF', shouldClose: boolean = true) => {
         if (imageUploadMode === 'background') {
-            // New Multi-Layer Logic: Add as new layer
-            addFighterLayer(croppedUri, preset, effect, effectColor);
+            if (Array.isArray(result)) {
+                // MULTI-TAB SYNC STRATEGY
+                const newLayers = [...fighterLayers]; // Clone current
+
+                result.forEach((tab) => {
+                    const existingIndex = newLayers.findIndex(l => l.id === tab.id);
+                    // Extract styles if present in tab object, otherwise fall back to defaults
+                    const tabPreset = tab.preset || 'original';
+                    const tabEffect = tab.effectMode || 'none';
+                    const tabColor = tab.effectColor || '#00FFFF';
+
+                    if (existingIndex !== -1) {
+                        // UPDATE existing
+                        newLayers[existingIndex] = {
+                            ...newLayers[existingIndex],
+                            uri: tab.uri,
+                            originalUri: tab.originalUri || newLayers[existingIndex].originalUri || tab.uri,
+                            preset: tabPreset,
+                            effect: tabEffect,
+                            effectColor: tabColor
+                        };
+                    } else {
+                        // ADD new
+                        newLayers.push({
+                            id: tab.id || `layer-${Date.now()}-${Math.random()}`,
+                            uri: tab.uri,
+                            originalUri: tab.originalUri || tab.uri, // Initialize originalUri same as uri
+                            x: 0, y: 0, scale: 1, rotation: 0, flipX: false,
+                            preset: tabPreset,
+                            effect: tabEffect,
+                        });
+                    }
+                });
+
+                setFighterLayers(newLayers);
+
+                // FORCE FOCUS if currently invalid (legacy 'photo')
+                // This fixes the issue where controls don't work after initial save
+                if (adjustmentFocus === 'photo' && newLayers.length > 0) {
+                    setAdjustmentFocus(newLayers[0].id);
+                }
+            } else {
+                // LEGACY / WEB / SINGLE ADD
+                addFighterLayer(result, preset, effect, effectColor);
+            }
         } else {
             // Profile Photo Logic (Unchanged)
-            setPhoto({ uri: croppedUri });
+            const uri = Array.isArray(result) ? result[0].uri : result;
+            setPhoto({ uri });
             setBanners(prev => prev.map(b => ({ ...b, selected: false })));
         }
-        setIsImageCropperVisible(false);
-        setPendingImageUri(null);
+
+        if (shouldClose) {
+            setIsImageCropperVisible(false);
+            setPendingImageUri(null);
+        }
     };
 
     const validateForm = (): boolean => {
@@ -712,10 +824,26 @@ export const useFighterForm = () => {
         setIsSubmitting(true);
 
         try {
+            let bakedUri = null;
+            let webBakedBlob: Blob | null = null;
+
+            const normalizeAssetUrl = (url?: string | null) => {
+                if (!url) return null;
+                if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+                const absolute = url.startsWith('http://') || url.startsWith('https://')
+                    ? url
+                    : toAbsoluteUrl(url);
+                return absolute.replace(/^http:\/\//, 'https://');
+            };
+
+            // 🔥 CAPTURAR LA IMAGEN DE LA TARJETA (QUEMAR)
+            console.log('🔍 [CAPTURE] Verificando fighterCardRef:', {
+                refExists: !!fighterCardRef,
+                currentExists: fighterCardRef?.current ? true : false,
+                currentType: fighterCardRef?.current?.constructor?.name
+            });
+
             // 1. Preparar datos base
-            const today = new Date();
-            const birthYear = today.getFullYear() - parseInt(formData.edad);
-            const fechaNacimiento = `${birthYear}-01-01`;
             const alturaMetros = parseFloat(formData.altura) / 100;
 
             const COUNTRY_CODES: any = { 'PE': '+51', 'AR': '+54', 'MX': '+52', 'US': '+1' };
@@ -725,14 +853,30 @@ export const useFighterForm = () => {
             // 2. Crear FormData
             const form = new global.FormData(); // Force global FormData for RN
 
+            // Si es espectador existente, enviar usuario_id para upgrade
+            if (isAlreadyAuth) {
+                try {
+                    const userStr = await AsyncStorage.getItem('user');
+                    if (userStr) {
+                        const user = JSON.parse(userStr);
+                        form.append('usuario_id', String(user.id));
+                        console.log('🔄 [UPGRADE] Enviando usuario_id:', user.id);
+                    }
+                } catch (e) {
+                    console.error('Error getting user for upgrade:', e);
+                }
+            }
+
             // Agregar campos de texto
             form.append('nombre', formData.nombre.trim());
             form.append('apellidos', formData.apellidos.trim() || '');
             form.append('email', formData.email.trim().toLowerCase());
-            form.append('password', formData.dni.trim());
+            if (!isAlreadyAuth) {
+                form.append('password', formData.dni.trim());
+            }
             form.append('telefono', fullPhone);
             form.append('apodo', formData.apodo.trim() || formData.nombre.trim().split(' ')[0]);
-            form.append('fecha_nacimiento', fechaNacimiento);
+            form.append('edad', formData.edad.trim());
             form.append('peso_actual', String(parseFloat(formData.peso)));
             form.append('altura', String(alturaMetros));
             form.append('genero', formData.genero);
@@ -758,29 +902,116 @@ export const useFighterForm = () => {
                 }
             }
 
-            // 4. AGREGAR FOTO DE FONDO (CARD)
-            // 4. AGREGAR FOTO DE FONDO (CARD) - Now using Layers
-            // For backward compatibility or simplest approach, we send the FIRST layer as the background
-            // Or ideally, we should compose them. But user didn't ask for composition logic yet.
-            // We will send the first layer as 'foto_background' if exists.
-            if (fighterLayers.length > 0) {
-                const mainLayer = fighterLayers[0];
+            // 4. AGREGAR IMAGENES DE CAPAS (UNIVERSAL JSON)
+            for (const layer of fighterLayers) {
+                if (!layer.uri) continue;
+
                 if (Platform.OS === 'web') {
-                    try {
-                        const response = await fetch(mainLayer.uri);
-                        const blob = await response.blob();
-                        form.append('foto_background', blob, 'layer_0.jpg');
-                    } catch (blobErr) { console.error("Error blob web card:", blobErr); }
-                } else {
-                    form.append('foto_background', {
-                        uri: mainLayer.uri,
-                        name: 'layer_0.jpg',
-                        type: 'image/jpeg',
+                    if (layer.uri.startsWith('blob:') || layer.uri.startsWith('data:')) {
+                        try {
+                            const response = await fetch(layer.uri);
+                            const blob = await response.blob();
+                            form.append(`layer_file_${layer.id}`, blob, `layer_${layer.id}.png`);
+                        } catch (e) {
+                            console.error('Error subiendo layer web:', e);
+                        }
+                    }
+                    // Si ya es URL https/http, no es necesario adjuntar
+                } else if (layer.uri.startsWith('file://')) {
+                    form.append(`layer_file_${layer.id}`, {
+                        uri: layer.uri,
+                        name: `layer_${layer.id}.png`,
+                        type: 'image/png',
                     } as any);
                 }
             }
 
-            // 5. Enviar usando el servicio
+            // Construir JSON de composición (con URIs locales que el backend reemplazará)
+            const composition_json = {
+                version: "1.1",
+                background: { url: normalizeAssetUrl(selectedBackground) },
+                border: { url: normalizeAssetUrl(selectedBorder) },
+                layers: fighterLayers.map(l => ({
+                    id: l.id,
+                    uri: l.uri,
+                    x: l.x,
+                    y: l.y,
+                    scale: l.scale,
+                    rotation: l.rotation,
+                    flipX: l.flipX,
+                    preset: l.preset,
+                    effect: l.effect,
+                    effectColor: l.effectColor
+                })),
+                stickers: selectedStickers.map(s => ({
+                    url: normalizeAssetUrl(s),
+                    transform: stickerTransforms[s] || { x: 0, y: 0, scale: 1, rotation: 0, flipX: false }
+                })),
+                companyLogo: { url: normalizeAssetUrl(companyLogoUri) }
+            };
+            form.append('composition_json', JSON.stringify(composition_json));
+
+            // 🔥 CAPTURAR LA IMAGEN DE LA TARJETA (WEB + NATIVO)
+            if (Platform.OS === 'web' && fighterCardRef?.current) {
+                try {
+                    const { toBlob } = await import('html-to-image');
+                    await new Promise(resolve => setTimeout(resolve, 120));
+                    const node = fighterCardRef.current as unknown as HTMLElement;
+                    const blob = await toBlob(node, {
+                        cacheBust: true,
+                        pixelRatio: 2,
+                        backgroundColor: 'transparent',
+                    });
+                    if (blob) {
+                        webBakedBlob = blob;
+                        console.log('✅ [CAPTURE] Imagen web capturada exitosamente');
+                    } else {
+                        console.warn('⚠️ [CAPTURE] html-to-image no retornó blob');
+                    }
+                } catch (captureError: any) {
+                    console.error('❌ [CAPTURE] Error al capturar web:', captureError?.message || captureError);
+                }
+            } else if (Platform.OS !== 'web' && fighterCardRef && fighterCardRef.current) {
+                try {
+                    console.log('📸 [CAPTURE] Intentando capturar imagen de la tarjeta...');
+                    console.log('📸 [CAPTURE] Ref current:', fighterCardRef.current);
+
+                    // Pequeño delay para asegurar renderizado
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    console.log('⏱️ [CAPTURE] Delay completado, iniciando captura...');
+
+                    const uri = await captureRef(fighterCardRef, {
+                        format: 'png',
+                        quality: 1.0,
+                        result: 'tmpfile',
+                    });
+                    bakedUri = uri;
+                    console.log('✅ [CAPTURE] Imagen capturada exitosamente:', bakedUri);
+                } catch (captureError: any) {
+                    console.error('❌ [CAPTURE] Error al capturar imagen:', captureError);
+                    console.error('❌ [CAPTURE] Error message:', captureError?.message);
+                    console.error('❌ [CAPTURE] Error name:', captureError?.name);
+                    // Continuar sin imagen quemada
+                }
+            } else {
+                console.warn('⚠️ [CAPTURE] No se pudo capturar - ref no disponible:', {
+                    hasRef: !!fighterCardRef,
+                    hasCurrent: !!fighterCardRef?.current
+                });
+            }
+
+            // 5. AGREGAR IMAGEN "QUEMADA" (BAKED)
+            if (Platform.OS === 'web' && webBakedBlob) {
+                form.append('baked_image', webBakedBlob, `card_${formData.dni}.png`);
+            } else if (bakedUri) {
+                form.append('baked_image', {
+                    uri: bakedUri,
+                    name: `card_${formData.dni}.png`,
+                    type: 'image/png',
+                } as any);
+            }
+
+            // 6. Enviar usando el servicio
             const response = await fighterService.register(form);
             console.log('✅ Respuesta Servidor:', response);
 
@@ -804,7 +1035,21 @@ export const useFighterForm = () => {
                     setIsAutoLoggedIn(false);
                 }
             } else {
-                console.log('ℹ️ Usuario ya estaba logueado, saltando auto-login.');
+                // Upgrade: actualizar datos del usuario en AsyncStorage (tipo_id=2)
+                try {
+                    const userStr = await AsyncStorage.getItem('user');
+                    if (userStr) {
+                        const user = JSON.parse(userStr);
+                        user.tipo_id = 2;
+                        user.nombre = formData.nombre.trim();
+                        user.apellidos = formData.apellidos.trim();
+                        user.telefono = fullPhone;
+                        await AsyncStorage.setItem('user', JSON.stringify(user));
+                        console.log('✅ AsyncStorage actualizado con tipo_id=2');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Error actualizando AsyncStorage:', e);
+                }
             }
 
             setIsSubmitting(false);
@@ -819,7 +1064,8 @@ export const useFighterForm = () => {
                 photoUri: fighterLayers.length > 0 ? fighterLayers[0].uri : photo?.uri,
                 edad: formData.edad,
                 altura: formData.altura,
-                clubName: clubs?.find(c => c.id === formData.club_id)?.nombre
+                clubName: clubs?.find(c => c.id === formData.club_id)?.nombre,
+                bakedUrl: response.baked_url ? `${Config.BASE_URL}/${response.baked_url}` : null
             });
 
         } catch (error: any) {
@@ -835,8 +1081,8 @@ export const useFighterForm = () => {
     const handleCloseSuccessModal = () => {
         setShowSuccessModal(false); setSuccessData(null); setPhoto(null); setFighterLayers([]);
         if (isAlreadyAuth) {
-            setFormData(prev => ({ ...prev, nombre: '', apellidos: '', apodo: '', email: '', dni: '', telefono: '' })); // Reset essential
-            setCurrentStep(1);
+            // Espectador upgradeó a peleador → navegar a perfil
+            (navigation as any).navigate('Profile');
         } else {
             (navigation as any).navigate(isAutoLoggedIn ? 'Profile' : 'Login');
             setIsAutoLoggedIn(false);
@@ -869,10 +1115,10 @@ export const useFighterForm = () => {
         },
         toggleSticker,
         banners, currentBannerIndex, isManualSelection,
-        isImageCropperVisible, setIsImageCropperVisible, pendingImageUri, handleImageCropConfirm,
+        isImageCropperVisible, setIsImageCropperVisible, pendingImageUri, setPendingImageUri, handleImageCropConfirm,
         handleSubmit, showSuccessModal, successData, handleCloseSuccessModal,
         checkingAuth, existingFighter, showIdentityModal, setShowIdentityModal,
-        isAutoLoggedIn, handleBlurField,
+        isAlreadyAuth, isAutoLoggedIn, handleBlurField,
         fillDebugData, companyLogoUri,
         clearProfilePhoto: () => setPhoto(null),
         randomizeDesign: () => {
@@ -899,6 +1145,11 @@ export const useFighterForm = () => {
             setStickerTransforms({});
             setIsManualSelection(false);
             setAdjustmentFocus('photo');
+            if (banners.length > 0) {
+                const randomIndex = Math.floor(Math.random() * banners.length);
+                setCurrentBannerIndex(randomIndex);
+                setSelectedBackground(banners[randomIndex].url);
+            }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
         lastImageSource

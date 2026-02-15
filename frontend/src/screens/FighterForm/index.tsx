@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, Modal, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -21,16 +21,34 @@ import { EpicFighterSuccessModal } from '../../components/EpicFighterSuccessModa
 import { FighterIdentityModal } from '../../components/FighterIdentityModal';
 import { SponsorFooter } from './components/SponsorFooter';
 import { ImageCropper } from './components/ImageCropper';
+import { EditarImagenCard } from '../../components/common/EditarImagenCard';
+import { SettingsService } from '../../services/SettingsService';
+import { Config } from '../../config/config';
 
 const SHOW_DEBUG_GENERATOR = true;
 
 import { generateDebugFighter } from '../../data/dummyFighters';
 
 const FighterFormScreen = () => {
+    // Ref for capturing the fighter card as image
+    const fighterCardRef = useRef<View>(null);
+
     // UI State for Template Lists
     const [activeTemplateTab, setActiveTemplateTab] = React.useState<'none' | 'backgrounds' | 'borders' | 'stickers'>('none');
+
+    // Editor Version Switch
+    const [editorVersion, setEditorVersion] = React.useState<'legacy' | 'v2'>('legacy');
+    React.useEffect(() => {
+        SettingsService.getCropToolVersion().then((v: any) => {
+            console.log("🎨 Editor Version:", v);
+            setEditorVersion(v === 'v2' ? 'v2' : 'legacy');
+        });
+    }, []);
+
     // Local UI state for expandable photo button
     const [showProfilePhotoOptions, setShowProfilePhotoOptions] = React.useState(false);
+
+
 
     const {
         navigation, scrollViewRef, handleFieldLayout, handleSectionLayout,
@@ -44,15 +62,15 @@ const FighterFormScreen = () => {
         handleRemoveBackground, launchCamera, launchGallery, pickProfilePhoto, pickCardBackground, setCardBackgroundUrl, clearProfilePhoto,
         toggleSticker,
         banners, currentBannerIndex, isManualSelection,
-        isImageCropperVisible, setIsImageCropperVisible, pendingImageUri, handleImageCropConfirm,
+        isImageCropperVisible, setIsImageCropperVisible, pendingImageUri, setPendingImageUri, handleImageCropConfirm, 
         handleSubmit, showSuccessModal, successData, handleCloseSuccessModal,
-        checkingAuth, existingFighter, showIdentityModal, setShowIdentityModal, isAutoLoggedIn, validateField, handleBlurField,
+        checkingAuth, existingFighter, showIdentityModal, setShowIdentityModal, isAlreadyAuth, isAutoLoggedIn, validateField, handleBlurField,
         fillDebugData, randomizeDesign, companyLogoUri, toggleBorder, resetDesign,
         // Multi-Layer & Unified Transforms
         fighterLayers, addFighterLayer, removeFighterLayer, lastImageSource,
         currentOffsetX, currentOffsetY, currentScale, currentRotation, currentFlipX,
         updateOffsetX, updateOffsetY, updateScale, updateRotation, updateFlipX
-    } = useFighterForm();
+    } = useFighterForm(fighterCardRef);
 
     // Unified helpers are now imported from the hook. 
     // Local wrappers removed.
@@ -77,7 +95,19 @@ const FighterFormScreen = () => {
                         visible={showIdentityModal}
                         onClose={() => { setShowIdentityModal(false); setTimeout(() => navigation.navigate('Home' as never), 100); }}
                         onEdit={() => { setShowIdentityModal(false); setTimeout(() => navigation.navigate('Profile' as never), 100); }}
-                        fighter={{ ...existingFighter, photoUri: existingFighter.foto_perfil ? `https://boxtiove.com/storage/${existingFighter.foto_perfil}` : null }}
+                        fighter={{
+                            nombre: existingFighter.nombre,
+                            apellidos: existingFighter.apellidos,
+                            apodo: existingFighter.apodo,
+                            peso: existingFighter.peso_actual ? String(existingFighter.peso_actual) : undefined,
+                            genero: existingFighter.genero,
+                            photoUri: existingFighter.foto_perfil ? `${Config.BASE_URL}/${existingFighter.foto_perfil}` : null,
+                            bakedUrl: existingFighter.baked_url ? `${Config.BASE_URL}/${existingFighter.baked_url}` : null,
+                            compositionJson: existingFighter.composition_json || null,
+                            edad: existingFighter.edad,
+                            altura: existingFighter.altura ? Math.round(existingFighter.altura * 100) : undefined, // Convert m back to cm for display
+                            record: `${existingFighter.victorias ?? 0}-${existingFighter.derrotas ?? 0}-${existingFighter.empates ?? 0}`
+                        }}
                     />
                 </View>
             ) : (
@@ -123,6 +153,7 @@ const FighterFormScreen = () => {
                                 </TouchableOpacity>
                             </View>
                             <FighterCard
+                                ref={fighterCardRef}
                                 fighter={{
                                     nombre: formData.nombre,
                                     apellidos: formData.apellidos,
@@ -132,7 +163,8 @@ const FighterFormScreen = () => {
                                     photoUri: undefined,
                                     clubName: clubs?.find(c => c.id == formData.club_id)?.nombre,
                                     edad: formData.edad,
-                                    altura: formData.altura
+                                    altura: formData.altura,
+                                    record: '0-0-0'
                                 }}
                                 variant="preview"
                                 backgroundUri={selectedBackground}
@@ -141,8 +173,8 @@ const FighterFormScreen = () => {
                                 fighterLayers={fighterLayers}
 
                                 // Legacy Props (Can receive defaults or be ignored)
-                                // backgroundOffsetY={0} 
-                                // backgroundOffsetX={0} 
+                                // backgroundOffsetY={0}
+                                // backgroundOffsetX={0}
                                 // backgroundScale={1}
 
                                 borderUri={selectedBorder}
@@ -186,6 +218,10 @@ const FighterFormScreen = () => {
                                 onLaunchCamera={() => launchCamera('background')}
                                 onLaunchGallery={() => launchGallery('background')}
                                 onRemoveLayer={removeFighterLayer}
+                                onOpenEditor={() => {
+                                    setPendingImageUri(''); // Empty string implies "Edit Existing"
+                                    setIsImageCropperVisible(true);
+                                }}
                             />
                         )}
 
@@ -279,7 +315,7 @@ const FighterFormScreen = () => {
                                 </FormSection>
 
                                 <FormSection title="CONTACTO" icon="call" onLayout={handleSectionLayout('contacto')}>
-                                    <FormInput label="Email" value={formData.email} onChangeText={(v) => updateField('email', v)} placeholder="correo@ejemplo.com" keyboardType="email-address" icon="mail" autoCapitalize="none" error={getFieldError('email')} successMessage={getFieldSuccess('email')} isValid={!!getFieldSuccess('email')} onFocus={() => setFocusedField('email')} onBlur={() => handleBlurField('email')} focused={focusedField === 'email'} />
+                                    <FormInput label="Email" value={formData.email} onChangeText={(v) => updateField('email', v)} placeholder="correo@ejemplo.com" keyboardType="email-address" icon="mail" autoCapitalize="none" error={getFieldError('email')} successMessage={getFieldSuccess('email')} isValid={!!getFieldSuccess('email')} onFocus={() => setFocusedField('email')} onBlur={() => handleBlurField('email')} focused={focusedField === 'email'} editable={!isAlreadyAuth} />
                                     <PhoneInput label="Teléfono" value={formData.telefono} onChangeText={(v) => updateField('telefono', v)} countryCode={formData.countryCode} onCountryChange={(c) => updateField('countryCode', c)} error={getFieldError('telefono')} successMessage={getFieldSuccess('telefono')} isValid={!!getFieldSuccess('telefono')} onFocus={() => setFocusedField('telefono')} onBlur={() => handleBlurField('telefono')} focused={focusedField === 'telefono'} />
                                 </FormSection>
                             </View>
@@ -425,11 +461,13 @@ const FighterFormScreen = () => {
                 fighterData={successData ? {
                     nombre: successData.nombre, apellidos: successData.apellidos, apodo: successData.apodo,
                     peso: successData.peso, genero: successData.genero, photoUri: successData.photoUri || photo?.uri,
-                    edad: successData.edad, altura: successData.altura, clubName: successData.clubName || clubs.find(c => c.id === formData.club_id)?.nombre
+                    edad: successData.edad, altura: successData.altura, clubName: successData.clubName || clubs.find(c => c.id === formData.club_id)?.nombre,
+                    bakedUrl: successData.bakedUrl
                 } : {
                     nombre: formData.nombre, apellidos: formData.apellidos, apodo: formData.apodo,
                     peso: formData.peso, genero: formData.genero, photoUri: photo?.uri,
-                    edad: formData.edad, altura: formData.altura, clubName: clubs.find(c => c.id === formData.club_id)?.nombre
+                    edad: formData.edad, altura: formData.altura, clubName: clubs.find(c => c.id === formData.club_id)?.nombre,
+                    bakedUrl: null
                 }}
                 email={successData?.email || formData.email}
                 dni={successData?.dni || formData.dni}
@@ -440,29 +478,40 @@ const FighterFormScreen = () => {
                 fighterLayers={fighterLayers}
             />
 
-            <FighterIdentityModal
-                visible={showIdentityModal}
-                onClose={() => setShowIdentityModal(false)}
-                fighter={existingFighter}
-                onEdit={() => {
-                    setShowIdentityModal(false);
-                    // If auto-logged in or already auth, go to profile
-                    (navigation as any).navigate(isAutoLoggedIn ? 'Profile' : 'Login');
-                }}
-            />
-
-            {/* Image Editor (Universal) */}
-            <ImageCropper
-                visible={isImageCropperVisible}
-                imageUri={pendingImageUri}
-                onClose={() => setIsImageCropperVisible(false)}
-                onCrop={handleImageCropConfirm}
-                onChangePhoto={() => {
-                    if (lastImageSource === 'camera') launchCamera();
-                    else if (lastImageSource === 'gallery') launchGallery();
-                    else setShowImageOptions(true);
-                }}
-            />
+            {/* Image Editor (Universal Switch) */}
+            {/* Image Editor (Hybrid: Web/Legacy -> ImageCropper, Mobile V2 -> EditarImagenCard) */}
+            {Platform.OS !== 'web' && editorVersion === 'v2' ? (
+                <Modal visible={isImageCropperVisible} animationType="slide" transparent={false} onRequestClose={() => setIsImageCropperVisible(false)}>
+                    <EditarImagenCard
+                        imageUri={pendingImageUri || ''}
+                        onConfirm={(results) => {
+                            handleImageCropConfirm(results, 'original', 'none', '#00FFFF', false);
+                        }}
+                        onCancel={() => setIsImageCropperVisible(false)}
+                        onChangePhoto={() => {
+                            if (lastImageSource === 'camera') launchCamera();
+                            else if (lastImageSource === 'gallery') launchGallery();
+                            else setShowImageOptions(true);
+                        }}
+                        onLaunchCamera={() => launchCamera()}
+                        onLaunchGallery={() => launchGallery()}
+                        initialSource={lastImageSource as 'camera' | 'gallery'}
+                        existingLayers={imageUploadMode === 'profile' ? [] : fighterLayers}
+                    />
+                </Modal>
+            ) : (
+                <ImageCropper
+                    visible={isImageCropperVisible}
+                    imageUri={pendingImageUri}
+                    onClose={() => setIsImageCropperVisible(false)}
+                    onCrop={handleImageCropConfirm}
+                    onChangePhoto={() => {
+                        if (lastImageSource === 'camera') launchCamera();
+                        else if (lastImageSource === 'gallery') launchGallery();
+                        else setShowImageOptions(true);
+                    }}
+                />
+            )}
             <FighterImageUploadModal
                 visible={showImageOptions}
                 onClose={() => setShowImageOptions(false)}

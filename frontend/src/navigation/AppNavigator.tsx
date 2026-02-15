@@ -15,23 +15,14 @@ import RegisterUserScreen from '../screens/RegisterUserScreen';
 import LoginScreen from '../screens/LoginScreen';
 import BuyTicketsScreen from '../screens/BuyTicketsScreenNEW';
 import AdminBoletosScreen from '../screens/admin/AdminBoletosScreen';
+import AnunciosScreen from '../screens/AnunciosScreen';
 import { AdminPanel } from '../screens/admin';
-import BackgroundRemoverWeb from '../screens/web/BackgroundRemoverWeb';
 
 const Tab = createBottomTabNavigator();
 
 export default function AppNavigator() {
-  const linking = {
-    prefixes: ['https://boxtiove.com', 'boxevent://'],
-    config: {
-      screens: {
-        BackgroundRemoverWeb: 'ia/remover',
-      }
-    }
-  };
-
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
@@ -78,14 +69,14 @@ export default function AppNavigator() {
           options={{ tabBarButton: () => null }}
         />
         <Tab.Screen
-          name="AdminBoletos"
-          component={AdminBoletosScreen}
+          name="Anuncios"
+          component={AnunciosScreen}
           options={{ tabBarButton: () => null }}
         />
         <Tab.Screen
-          name="BackgroundRemoverWeb"
-          component={BackgroundRemoverWeb}
-          options={{ tabBarButton: () => null, headerShown: false }}
+          name="AdminBoletos"
+          component={AdminBoletosScreen}
+          options={{ tabBarButton: () => null }}
         />
       </Tab.Navigator>
     </NavigationContainer>

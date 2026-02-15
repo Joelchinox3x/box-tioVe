@@ -42,7 +42,7 @@ export default function AdminBannerScreen() {
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true, // Permitir recorte básico
             aspect: [22, 10], // Aspect ratio 2.2:1 (el del banner)
             quality: 1,

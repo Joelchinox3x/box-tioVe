@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../config/Config.php';
 class BrandingController {
     private $db;
     private $uploadDir = __DIR__ . '/../files/logos/';
@@ -21,9 +22,7 @@ class BrandingController {
             $logos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Formatear respuesta con URLs completas
-            $host = $_SERVER['HTTP_HOST'];
-            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
-            $baseUrl = $protocol . "://" . $host . "/files/logos/";
+            $baseUrl = Config::BASE_URL . "/files/logos/";
 
             $result = [
                 "card" => null,
@@ -71,9 +70,7 @@ class BrandingController {
             $stmt->execute();
             $logos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $host = $_SERVER['HTTP_HOST'];
-            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
-            $baseUrl = $protocol . "://" . $host . "/files/logos/";
+            $baseUrl = Config::BASE_URL . "/files/logos/";
 
             $timestamp = time();
             foreach ($logos as &$logo) {

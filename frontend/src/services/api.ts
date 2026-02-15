@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { Config } from '../config/config';
 
-// Configuración de la API
-const API_BASE_URL = 'https://boxtiove.com/api';
+// Configuración de la API desde archivo centralizado
+const API_BASE_URL = Config.API_URL;
 
 // Crear instancia de axios
 const api = axios.create({
@@ -16,6 +17,12 @@ const api = axios.create({
 // Interceptor de solicitudes
 api.interceptors.request.use(
   (config) => {
+    // console.log('🌐 [API REQUEST]', {
+    //   method: config.method?.toUpperCase(),
+    //   url: config.url,
+    //   baseURL: config.baseURL,
+    //   fullURL: `${config.baseURL}${config.url}`
+    // });
     // Aquí puedes agregar tokens de autenticación
     // const token = await AsyncStorage.getItem('token');
     // if (token) {
@@ -24,6 +31,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    // console.error('❌ [API REQUEST ERROR]', error);
     return Promise.reject(error);
   }
 );
@@ -31,17 +39,30 @@ api.interceptors.request.use(
 // Interceptor de respuestas
 api.interceptors.response.use(
   (response) => {
+    // console.log('✅ [API RESPONSE]', {
+    //   status: response.status,
+    //   url: response.config.url,
+    //   data: response.data
+    // });
     return response;
   },
   (error) => {
     if (error.response) {
       // Error de respuesta del servidor
-      console.error('API Error:', error.response.data);
+      // console.error('❌ [API ERROR - Response]', {
+      //   status: error.response.status,
+      //   data: error.response.data,
+      //   url: error.config?.url
+      // });
     } else if (error.request) {
       // Error de red
-      console.error('Network Error:', error.request);
+      // console.error('❌ [API ERROR - Network]', {
+      //   message: 'No se pudo conectar con el servidor',
+      //   url: error.config?.url,
+      //   baseURL: error.config?.baseURL
+      // });
     } else {
-      console.error('Error:', error.message);
+      // console.error('❌ [API ERROR - Unknown]', error.message);
     }
     return Promise.reject(error);
   }

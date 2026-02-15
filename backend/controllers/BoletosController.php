@@ -4,6 +4,8 @@
  * Maneja todas las operaciones relacionadas con la venta de boletos
  */
 
+require_once __DIR__ . '/../config/Config.php';
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -206,7 +208,7 @@ class BoletosController {
                 $targetPath = $uploadDir . $fileName;
 
                 if (move_uploaded_file($_FILES['comprobante']['tmp_name'], $targetPath)) {
-                    $comprobanteUrl = 'https://boxtiove.com/uploads/comprobantes/' . $fileName;
+                    $comprobanteUrl = Config::getFileUrl($fileName, 'comprobantes');
                 } else {
                     throw new Exception("Error al subir el comprobante");
                 }

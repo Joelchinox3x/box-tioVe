@@ -12,19 +12,38 @@ import {
   Image,
   Platform,
   RefreshControl,
+  Linking,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { createShadow } from '../utils/shadows';
 import { ScreenHeader } from '../components/common/ScreenHeader';
 import { clubService, Club } from '../services/clubService';
+import { fighterService } from '../services/fighterService';
 import api from '../services/api';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ChangePasswordModal } from '../components/common/ChangePasswordModal';
+import { AdminService } from '../services/AdminService';
+import { Config } from '../config/config';
+import { getCategoria } from '../utils/categories';
 
-const API_BASE_URL = 'https://boxtiove.com';
+interface MetodoPagoInfo {
+  id: number;
+  codigo: string;
+  nombre: string;
+  requiere_comprobante: number;
+  activo: number;
+  qr_imagen_url: string | null;
+  telefono_receptor: string | null;
+  nombre_receptor: string | null;
+}
+
+const API_BASE_URL = Config.BASE_URL;
 
 interface Usuario {
   id: number;
@@ -45,10 +64,12 @@ interface Usuario {
     categoria: string;
     peso: number;
     altura: number;
+    edad?: number;
     victorias: number;
     derrotas: number;
     empates: number;
   };
+  es_primer_login?: number;
 }
 
 export default function ProfileScreen() {
@@ -59,6 +80,74 @@ export default function ProfileScreen() {
   const [loadingExtra, setLoadingExtra] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [messageModal, setMessageModal] = useState<{ visible: boolean; type: 'success' | 'error'; message: string }>({ visible: false, type: 'success', message: '' });
+
+  // Estado de inscripción al evento
+  const [eventoData, setEventoData] = useState<any>(null);
+  const [inscripcionData, setInscripcionData] = useState<any>(null);
+  const [estadoPeleador, setEstadoPeleador] = useState<string>('pendiente');
+  const [loadingInscripcion, setLoadingInscripcion] = useState(false);
+  const [inscribiendose, setInscribiendose] = useState(false);
+  const [managerContacto, setManagerContacto] = useState<{ id: number; nombre_visible: string; telefono_whatsapp: string; mensaje_base: string; rol: string } | null>(null);
+  const [managerCobros, setManagerCobros] = useState<{ id: number; nombre_visible: string; telefono_whatsapp: string; mensaje_base: string; rol: string } | null>(null);
+  const [managerGeneral, setManagerGeneral] = useState<{ id: number; nombre_visible: string; telefono_whatsapp: string; mensaje_base: string; rol: string } | null>(null);
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState<string>('');
+  const [comprobante, setComprobante] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [metodosPagoDisponibles, setMetodosPagoDisponibles] = useState<MetodoPagoInfo[]>([]);
+
+  const getImageUrl = (path: string | null | undefined): string | null => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    return `${Config.BASE_URL}/${path}`;
+  };
+
+  const requiresComprobante = (metodo: string) => {
+    const found = metodosPagoDisponibles.find(m => m.codigo === metodo);
+    return found ? found.requiere_comprobante === 1 : ['yape', 'plin', 'transferencia', 'deposito'].includes(metodo);
+  };
+
+  const loadMetodosPago = async () => {
+    try {
+      const result = await AdminService.getMetodosPago({ activo: 1 });
+      if (result.success && result.metodos) {
+        setMetodosPagoDisponibles(result.metodos);
+      }
+    } catch (error) {
+      console.log('Error cargando métodos de pago:', error);
+    }
+  };
+
+  const pickComprobante = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permiso requerido', 'Se requiere permiso para acceder a tu galería.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const uri = asset.uri;
+        const uriParts = uri.split('.');
+        const fileType = uriParts[uriParts.length - 1] || 'jpg';
+        const name = `comprobante_${Date.now()}.${fileType}`;
+        const type = `image/${fileType === 'jpg' ? 'jpeg' : fileType}`;
+
+        setComprobante({ uri, name, type });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (err) {
+      console.error('Error al seleccionar comprobante:', err);
+      Alert.alert('Error', 'No se pudo seleccionar el comprobante.');
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -77,6 +166,10 @@ export default function ProfileScreen() {
         // Cargar datos extra si tiene club (usando el ID posiblemente actualizado)
         if (parsedUser.club_id) {
           loadClubData(parsedUser.club_id);
+        }
+        // Cargar inscripción si es peleador (con datos cacheados)
+        if (parsedUser.tipo_id === 2 && parsedUser.peleador?.id) {
+          loadInscripcionEvento(parsedUser.peleador.id);
         }
       }
     } catch (error) {
@@ -100,6 +193,16 @@ export default function ProfileScreen() {
 
         if (freshUser.club_id) {
           loadClubData(freshUser.club_id);
+        }
+
+        // Cargar inscripción si es peleador
+        if (freshUser.tipo_id === 2 && freshUser.peleador?.id) {
+          loadInscripcionEvento(freshUser.peleador.id);
+        }
+
+        // 🛡️ SECURITY PROMPT: Check if first login
+        if (freshUser.es_primer_login === 1) {
+          setTimeout(() => setPasswordModalVisible(true), 1000); // Wait a bit for UX
         }
       }
     } catch (error) {
@@ -127,6 +230,125 @@ export default function ProfileScreen() {
       setLoadingExtra(false);
     }
   };
+
+  const loadInscripcionEvento = async (peleadorId: number) => {
+    try {
+      setLoadingInscripcion(true);
+      const result = await fighterService.getInscripcionEvento(peleadorId);
+      if (result.success) {
+        setEstadoPeleador(result.estado_peleador || 'pendiente');
+        setEventoData(result.evento);
+        setInscripcionData(result.inscripcion);
+
+        if (result.evento && !result.inscripcion) {
+          // Hay evento pero no se ha inscrito → mostrar boton + manager
+          loadManagerByRol('manager_peleadores', setManagerContacto);
+        } else if (result.inscripcion && result.inscripcion.estado_pago === 'inscrito') {
+          // Estado INSCRITO: se inscribió pero no ha pagado → cargar métodos de pago
+          loadMetodosPago();
+          loadManagerByRol('manager_cobros', setManagerCobros);
+        } else if (result.inscripcion && result.inscripcion.estado_pago === 'pendiente') {
+          // Estado PENDIENTE: pago enviado, esperando confirmación del admin
+          loadManagerByRol('manager_cobros', setManagerCobros);
+          loadManagerByRol('manager_general', setManagerGeneral);
+        } else if (result.inscripcion && result.inscripcion.estado_pago === 'pagado') {
+          // Estado PAGADO: pago confirmado
+          loadManagerByRol('manager_general', setManagerGeneral);
+        }
+
+        if (result.estado_peleador === 'rechazado') {
+          loadManagerByRol('manager_peleadores', setManagerContacto);
+        }
+      }
+    } catch (error) {
+      console.log('Error cargando inscripción:', error);
+    } finally {
+      setLoadingInscripcion(false);
+    }
+  };
+
+  const loadManagerByRol = async (rol: 'manager_peleadores' | 'manager_cobros' | 'manager_general', setter: (m: any) => void) => {
+    try {
+      const result = await fighterService.getManagerContacto(rol);
+      if (result.success && result.manager) {
+        setter(result.manager);
+      }
+    } catch (error) {
+      console.log(`Error cargando manager ${rol}:`, error);
+    }
+  };
+
+  const handleInscribirse = async () => {
+    if (!metodoPagoSeleccionado) {
+      setMessageModal({ visible: true, type: 'error', message: 'Selecciona un método de pago antes de inscribirte.' });
+      return;
+    }
+    if (requiresComprobante(metodoPagoSeleccionado) && !comprobante) {
+      setMessageModal({ visible: true, type: 'error', message: 'Sube el voucher de tu pago antes de continuar.' });
+      return;
+    }
+    if (!user?.peleador?.id || !eventoData?.id) return;
+
+    try {
+      setInscribiendose(true);
+      const result = await fighterService.inscribirEvento(
+        user.peleador.id,
+        eventoData.id,
+        metodoPagoSeleccionado,
+        comprobante || undefined
+      );
+
+      // Mostrar modal de éxito
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMessageModal({
+        visible: true,
+        type: 'success',
+        message: '✅ Tu pago fue enviado correctamente. Un administrador lo verificará pronto.'
+      });
+
+      // Esperar un momento antes de recargar para que el usuario vea el modal
+      setTimeout(() => {
+        loadInscripcionEvento(user.peleador.id);
+        setComprobante(null);
+        setMetodoPagoSeleccionado('');
+      }, 500);
+
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.message || 'No se pudo completar la inscripción';
+      setMessageModal({ visible: true, type: 'error', message: errorMsg });
+    } finally {
+      setInscribiendose(false);
+    }
+  };
+
+  const handleCrearInscripcion = async () => {
+    if (!user?.peleador?.id || !eventoData?.id) return;
+    try {
+      setInscribiendose(true);
+      const result = await fighterService.crearInscripcion(user.peleador.id, eventoData.id);
+
+      // Mostrar modal de confirmación
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMessageModal({
+        visible: true,
+        type: 'success',
+        message: '✅ Te inscribiste correctamente. Ahora selecciona tu método de pago para continuar.'
+      });
+
+      // Recargar para mostrar la pantalla de pago
+      setTimeout(() => {
+        loadInscripcionEvento(user.peleador.id);
+      }, 500);
+
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.message || 'No se pudo crear la inscripción';
+      setMessageModal({ visible: true, type: 'error', message: errorMsg });
+    } finally {
+      setInscribiendose(false);
+    }
+  };
+
+  const comprobanteRequired = metodoPagoSeleccionado ? requiresComprobante(metodoPagoSeleccionado) : false;
 
   // Cargar datos cuando la pantalla recibe foco
   useFocusEffect(
@@ -311,7 +533,7 @@ export default function ProfileScreen() {
                 <Text style={styles.fighterNickname}>"{user.peleador.apodo}"</Text>
                 <View style={styles.genderBadge}>
                   <Text style={styles.genderText}>
-                    {user.peleador.genero === 'M' ? '♂ MASCULINO' : '♀ FEMENINO'}
+                    {(user.peleador.genero?.toLowerCase().startsWith('m')) ? '♂ MASCULINO' : '♀ FEMENINO'}
                   </Text>
                 </View>
               </View>
@@ -319,7 +541,7 @@ export default function ProfileScreen() {
               <View style={styles.fighterStats}>
                 <View style={styles.statBox}>
                   <Text style={styles.statLabel}>Categoría</Text>
-                  <Text style={styles.statValue}>{user.peleador.categoria}</Text>
+                  <Text style={styles.statValue}>{user.peleador.categoria || getCategoria(user.peleador.peso)}</Text>
                 </View>
 
                 <View style={styles.statBox}>
@@ -360,27 +582,408 @@ export default function ProfileScreen() {
         {user.tipo_id === 2 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>📅 MI INSCRIPCIÓN AL EVENTO</Text>
-            <View style={styles.enrollmentCard}>
-              <View style={styles.enrollmentHeader}>
-                <Ionicons name="trophy" size={24} color={COLORS.primary} />
-                <Text style={styles.enrollmentTitle}>Boxeo de Gala 2026</Text>
-              </View>
 
-              <View style={styles.enrollmentStatusRow}>
-                <View style={styles.statusChip}>
-                  <Text style={styles.statusChipText}>ESTADO: PAGADO</Text>
+            {loadingInscripcion ? (
+              <View style={styles.enrollmentCard}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={[styles.enrollmentTitle, { textAlign: 'center', marginTop: SPACING.sm }]}>
+                  Cargando...
+                </Text>
+              </View>
+            ) : !eventoData ? (
+              /* No hay evento activo */
+              <View style={styles.enrollmentCard}>
+                <View style={styles.enrollmentHeader}>
+                  <Ionicons name="calendar-outline" size={24} color={COLORS.text.tertiary} />
+                  <Text style={[styles.enrollmentTitle, { color: COLORS.text.tertiary }]}>
+                    No hay eventos próximos
+                  </Text>
                 </View>
-                <Text style={styles.paymentMethod}>Yape • S/ 20.00</Text>
+                <Text style={{ color: COLORS.text.secondary, fontSize: TYPOGRAPHY.fontSize.sm }}>
+                  Cuando se programe un evento, aquí podrás inscribirte.
+                </Text>
               </View>
+            ) : estadoPeleador === 'rechazado' ? (
+              /* ESTADO: Peleador RECHAZADO */
+              <View style={[styles.enrollmentCard, { borderColor: COLORS.error + '50' }]}>
+                <View style={styles.enrollmentHeader}>
+                  <Ionicons name="close-circle" size={24} color={COLORS.error} />
+                  <Text style={styles.enrollmentTitle}>{eventoData.nombre}</Text>
+                </View>
+                <View style={[styles.statusChip, { backgroundColor: COLORS.error }]}>
+                  <Text style={styles.statusChipText}>RECHAZADO</Text>
+                </View>
+                <View style={styles.lockedMessage}>
+                  <Ionicons name="information-circle" size={18} color={COLORS.error} />
+                  <Text style={styles.lockedMessageText}>
+                    Tu perfil fue rechazado. Contacta al administrador para más información.
+                  </Text>
+                </View>
+                {managerContacto && (
+                  <TouchableOpacity
+                    style={styles.whatsappButton}
+                    onPress={() => {
+                      const phone = managerContacto.telefono_whatsapp.replace(/\D/g, '');
+                      const phoneWithCode = phone.startsWith('51') ? phone : `51${phone}`;
+                      const nombre = `${user.nombre} ${user.apellidos || ''}`.trim();
+                      const apodo = user.peleador?.apodo ? ` "${user.peleador.apodo}"` : '';
+                      const edad = user.peleador?.edad ? `, ${user.peleador.edad} años` : '';
+                      const peso = user.peleador?.peso ? `, ${user.peleador.peso}kg` : '';
+                      const msg = `Hola, soy ${nombre}${apodo}${edad}${peso}. Mi perfil fue rechazado y quiero más información. Gracias.`;
+                      Linking.openURL(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                    <Text style={styles.whatsappButtonText}>
+                      Contactar a {managerContacto.nombre_visible}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : eventoData && !inscripcionData ? (
+              /* ESTADO: Hay evento pero NO se ha inscrito aún */
+              <View style={[styles.enrollmentCard, { borderColor: COLORS.primary + '50' }]}>
+                <View style={styles.enrollmentHeader}>
+                  <Ionicons name="trophy" size={24} color={COLORS.primary} />
+                  <Text style={styles.enrollmentTitle}>{eventoData.nombre}</Text>
+                </View>
 
-              <TouchableOpacity
-                style={styles.detailsButton}
-                onPress={() => Alert.alert('Detalle', 'Tu inscripción ha sido confirmada. ¡Prepárate para la pelea!')}
-              >
-                <Text style={styles.detailsButtonText}>Ver comprobante</Text>
-                <Ionicons name="document-text-outline" size={16} color={COLORS.text.secondary} />
-              </TouchableOpacity>
-            </View>
+                <View style={styles.eventoInfoRow}>
+                  <Ionicons name="calendar" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.eventoInfoText}>
+                    {new Date(eventoData.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </Text>
+                </View>
+                {eventoData.direccion && (
+                  <View style={styles.eventoInfoRow}>
+                    <Ionicons name="location" size={16} color={COLORS.text.secondary} />
+                    <Text style={styles.eventoInfoText}>{eventoData.direccion}</Text>
+                  </View>
+                )}
+
+                <View style={styles.precioContainer}>
+                  <Text style={styles.precioLabel}>Precio de inscripción:</Text>
+                  <Text style={styles.precioValue}>S/ {Number(eventoData.precio_inscripcion_peleador || 0).toFixed(2)}</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.inscribirseBtn}
+                  onPress={handleCrearInscripcion}
+                  disabled={inscribiendose}
+                >
+                  {inscribiendose ? (
+                    <ActivityIndicator size="small" color={COLORS.text.inverse} />
+                  ) : (
+                    <>
+                      <Ionicons name="hand-right" size={20} color={COLORS.text.inverse} />
+                      <Text style={styles.inscribirseBtnText}>INSCRIBIRME AL EVENTO</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {managerContacto && (
+                  <TouchableOpacity
+                    style={[styles.whatsappButton, { marginTop: SPACING.sm }]}
+                    onPress={() => {
+                      const phone = managerContacto.telefono_whatsapp.replace(/\D/g, '');
+                      const phoneWithCode = phone.startsWith('51') ? phone : `51${phone}`;
+                      const nombre = `${user.nombre} ${user.apellidos || ''}`.trim();
+                      const apodo = user.peleador?.apodo ? ` "${user.peleador.apodo}"` : '';
+                      const edad = user.peleador?.edad ? `, ${user.peleador.edad} años` : '';
+                      const peso = user.peleador?.peso ? `, ${user.peleador.peso}kg` : '';
+                      const evento = eventoData?.nombre || 'el evento';
+                      const msg = `Hola, soy ${nombre}${apodo}${edad}${peso}. Quiero inscribirme en ${evento}. Quedo atento!`;
+                      Linking.openURL(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                    <Text style={styles.whatsappButtonText}>
+                      Dudas? Contactar a {managerContacto.nombre_visible}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : inscripcionData && inscripcionData.estado_pago === 'inscrito' ? (
+              /* ESTADO: INSCRITO - se inscribió pero aún no ha pagado */
+              <View style={[styles.enrollmentCard, { borderColor: COLORS.primary + '50' }]}>
+                <View style={styles.enrollmentHeader}>
+                  <Ionicons name="trophy" size={24} color={COLORS.primary} />
+                  <Text style={styles.enrollmentTitle}>{eventoData.nombre}</Text>
+                </View>
+
+                <View style={styles.eventoInfoRow}>
+                  <Ionicons name="calendar" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.eventoInfoText}>
+                    {new Date(eventoData.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}
+                    {eventoData.hora ? ` • ${eventoData.hora.substring(0, 5)}` : ''}
+                  </Text>
+                </View>
+
+                {eventoData.direccion && (
+                  <View style={styles.eventoInfoRow}>
+                    <Ionicons name="location" size={16} color={COLORS.text.secondary} />
+                    <Text style={styles.eventoInfoText}>{eventoData.direccion}</Text>
+                  </View>
+                )}
+
+                <View style={styles.precioContainer}>
+                  <Text style={styles.precioLabel}>Precio de inscripción:</Text>
+                  <Text style={styles.precioValue}>S/ {Number(eventoData.precio_inscripcion_peleador || 0).toFixed(2)}</Text>
+                </View>
+
+                {/* Selector de método de pago con datos reales de BD */}
+                <Text style={styles.metodoPagoLabel}>Selecciona método de pago:</Text>
+                <View style={styles.metodoPagoGrid}>
+                  {metodosPagoDisponibles.map((metodo) => {
+                    const iconMap: { [key: string]: string } = {
+                      yape: 'phone-portrait',
+                      plin: 'phone-portrait',
+                      transferencia: 'card',
+                      efectivo: 'cash',
+                      deposito: 'business',
+                    };
+                    return (
+                      <TouchableOpacity
+                        key={metodo.codigo}
+                        style={[
+                          styles.metodoPagoOption,
+                          metodoPagoSeleccionado === metodo.codigo && styles.metodoPagoOptionSelected,
+                        ]}
+                        onPress={() => {
+                          setMetodoPagoSeleccionado(metodo.codigo);
+                          setComprobante(null);
+                        }}
+                      >
+                        <Ionicons
+                          name={(iconMap[metodo.codigo] || 'wallet') as any}
+                          size={18}
+                          color={metodoPagoSeleccionado === metodo.codigo ? COLORS.text.inverse : COLORS.primary}
+                        />
+                        <Text
+                          style={[
+                            styles.metodoPagoText,
+                            metodoPagoSeleccionado === metodo.codigo && styles.metodoPagoTextSelected,
+                          ]}
+                        >
+                          {metodo.nombre}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Card de detalle del método seleccionado */}
+                {metodoPagoSeleccionado !== '' && (() => {
+                  const metodoInfo = metodosPagoDisponibles.find(m => m.codigo === metodoPagoSeleccionado);
+                  if (!metodoInfo) return null;
+                  const hasDetails = metodoInfo.nombre_receptor || metodoInfo.telefono_receptor || metodoInfo.qr_imagen_url;
+                  if (!hasDetails) return null;
+                  return (
+                    <View style={styles.paymentInfoCard}>
+                      <Text style={styles.paymentInfoTitle}>{metodoInfo.nombre}</Text>
+                      {metodoInfo.nombre_receptor && (
+                        <View style={styles.paymentDetailRow}>
+                          <Ionicons name="person-outline" size={16} color={COLORS.text.secondary} />
+                          <Text style={styles.paymentInfoText}>{metodoInfo.nombre_receptor}</Text>
+                        </View>
+                      )}
+                      {metodoInfo.telefono_receptor && (
+                        <View style={styles.paymentDetailRow}>
+                          <Ionicons name="call-outline" size={16} color={COLORS.text.secondary} />
+                          <Text style={styles.paymentInfoText}>{metodoInfo.telefono_receptor}</Text>
+                        </View>
+                      )}
+                      {metodoInfo.qr_imagen_url && (
+                        <View>
+                          <Image
+                            source={{ uri: getImageUrl(metodoInfo.qr_imagen_url) || '' }}
+                            style={styles.paymentQr}
+                            resizeMode="contain"
+                          />
+                          <TouchableOpacity
+                            style={styles.downloadQrButton}
+                            onPress={() => {
+                              const url = getImageUrl(metodoInfo.qr_imagen_url);
+                              if (url) Linking.openURL(url);
+                            }}
+                          >
+                            <Ionicons name="download-outline" size={16} color={COLORS.primary} />
+                            <Text style={styles.downloadQrText}>Descargar QR</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
+
+                {metodoPagoSeleccionado !== '' && metodoPagoSeleccionado !== 'efectivo' && (
+                  <View style={styles.comprobanteSection}>
+                    <Text style={styles.comprobanteLabel}>
+                      Sube tu voucher de pago{comprobanteRequired ? ' *' : ' (opcional)'}
+                    </Text>
+                    {comprobante ? (
+                      <View style={styles.comprobantePreviewRow}>
+                        <Image source={{ uri: comprobante.uri }} style={styles.comprobantePreview} />
+                        <View style={styles.comprobanteIconActions}>
+                          <TouchableOpacity style={styles.comprobanteIconBtn} onPress={pickComprobante}>
+                            <Ionicons name="camera-reverse-outline" size={20} color={COLORS.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.comprobanteIconBtn, { backgroundColor: COLORS.error + '15' }]}
+                            onPress={() => setComprobante(null)}
+                          >
+                            <Ionicons name="trash" size={20} color={COLORS.error} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={styles.comprobanteButton} onPress={pickComprobante}>
+                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.text.inverse} />
+                        <Text style={styles.comprobanteButtonText}>Subir voucher</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.inscribirseBtn,
+                    (!metodoPagoSeleccionado || (comprobanteRequired && !comprobante)) && { opacity: 0.5 },
+                  ]}
+                  onPress={handleInscribirse}
+                  disabled={inscribiendose || !metodoPagoSeleccionado || (comprobanteRequired && !comprobante)}
+                >
+                  {inscribiendose ? (
+                    <ActivityIndicator size="small" color={COLORS.text.inverse} />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={20} color={COLORS.text.inverse} />
+                      <Text style={styles.inscribirseBtnText}>ENVIAR PAGO</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {managerCobros && (
+                  <TouchableOpacity
+                    style={[styles.whatsappButton, { marginTop: SPACING.sm }]}
+                    onPress={() => {
+                      const phone = managerCobros.telefono_whatsapp.replace(/\D/g, '');
+                      const phoneWithCode = phone.startsWith('51') ? phone : `51${phone}`;
+                      const nombre = `${user.nombre} ${user.apellidos || ''}`.trim();
+                      const apodo = user.peleador?.apodo ? ` "${user.peleador.apodo}"` : '';
+                      const edad = user.peleador?.edad ? `, ${user.peleador.edad} años` : '';
+                      const peso = user.peleador?.peso ? `, ${user.peleador.peso}kg` : '';
+                      const evento = eventoData?.nombre || 'el evento';
+                      const msg = `Hola, soy ${nombre}${apodo}${edad}${peso}. Quiero coordinar el pago de mi inscripción a ${evento}.`;
+                      Linking.openURL(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                    <Text style={styles.whatsappButtonText}>
+                      Dudas sobre pago? Contactar a {managerCobros.nombre_visible}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : inscripcionData && inscripcionData.estado_pago === 'pendiente' ? (
+              /* ESTADO: PENDIENTE - pago enviado, esperando confirmación del admin */
+              <View style={[styles.enrollmentCard, { borderColor: COLORS.warning + '50' }]}>
+                <View style={styles.enrollmentHeader}>
+                  <Ionicons name="trophy" size={24} color={COLORS.primary} />
+                  <Text style={styles.enrollmentTitle}>{eventoData.nombre}</Text>
+                </View>
+
+                <View style={styles.enrollmentStatusRow}>
+                  <View style={[styles.statusChip, { backgroundColor: COLORS.warning }]}>
+                    <Text style={styles.statusChipText}>PAGO PENDIENTE</Text>
+                  </View>
+                  <Text style={styles.paymentMethod}>
+                    {inscripcionData.metodo_pago?.charAt(0).toUpperCase() + inscripcionData.metodo_pago?.slice(1)} • S/ {Number(inscripcionData.monto_pagado || eventoData.precio_inscripcion_peleador || 0).toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.pendingMessage}>
+                  <Ionicons name="time" size={18} color={COLORS.warning} />
+                  <Text style={styles.pendingMessageText}>
+                    Tu inscripción fue registrada. Un administrador confirmará tu pago pronto.
+                  </Text>
+                </View>
+
+                <Text style={styles.pendingDate}>
+                  Inscrito el {new Date(inscripcionData.fecha_inscripcion).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </Text>
+
+                {managerGeneral && (
+                  <TouchableOpacity
+                    style={[styles.whatsappButton, { marginTop: SPACING.sm }]}
+                    onPress={() => {
+                      const phone = managerGeneral.telefono_whatsapp.replace(/\D/g, '');
+                      const phoneWithCode = phone.startsWith('51') ? phone : `51${phone}`;
+                      const nombre = `${user.nombre} ${user.apellidos || ''}`.trim();
+                      const apodo = user.peleador?.apodo ? ` "${user.peleador.apodo}"` : '';
+                      const evento = eventoData?.nombre || 'el evento';
+                      const msg = `Hola ${managerGeneral.nombre_visible}, soy ${nombre}${apodo}. Tengo una consulta sobre mi pago pendiente para ${evento}.`;
+                      Linking.openURL(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                    <Text style={styles.whatsappButtonText}>
+                      Dudas? Contactar a {managerGeneral.nombre_visible}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              /* ESTADO 4: PAGO CONFIRMADO */
+              <View style={[styles.enrollmentCard, { borderColor: COLORS.success + '50' }]}>
+                <View style={styles.enrollmentHeader}>
+                  <Ionicons name="trophy" size={24} color={COLORS.primary} />
+                  <Text style={styles.enrollmentTitle}>{eventoData.nombre}</Text>
+                </View>
+
+                <View style={styles.enrollmentStatusRow}>
+                  <View style={[styles.statusChip, { backgroundColor: COLORS.success }]}>
+                    <Text style={styles.statusChipText}>PAGO CONFIRMADO</Text>
+                  </View>
+                  <Text style={styles.paymentMethod}>
+                    {inscripcionData.metodo_pago?.charAt(0).toUpperCase() + inscripcionData.metodo_pago?.slice(1)} • S/ {Number(inscripcionData.monto_pagado || 0).toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.confirmedMessage}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  <Text style={styles.confirmedMessageText}>
+                    Tu inscripción está confirmada. ¡Prepárate para la pelea!
+                  </Text>
+                </View>
+
+                {inscripcionData.fecha_pago && (
+                  <Text style={styles.pendingDate}>
+                    Pagado el {new Date(inscripcionData.fecha_pago).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </Text>
+                )}
+
+                {managerGeneral && (
+                  <TouchableOpacity
+                    style={[styles.whatsappButton, { marginTop: SPACING.sm }]}
+                    onPress={() => {
+                      const phone = managerGeneral.telefono_whatsapp.replace(/\D/g, '');
+                      const phoneWithCode = phone.startsWith('51') ? phone : `51${phone}`;
+                      const nombre = `${user.nombre} ${user.apellidos || ''}`.trim();
+                      const apodo = user.peleador?.apodo ? ` "${user.peleador.apodo}"` : '';
+                      const evento = eventoData?.nombre || 'el evento';
+                      const msg = `Hola ${managerGeneral.nombre_visible}, soy ${nombre}${apodo}. Ya estoy inscrito en ${evento}, solo tenía una consulta.`;
+                      Linking.openURL(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`);
+                    }}
+                  >
+                    <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                    <Text style={styles.whatsappButtonText}>
+                      Dudas? Contactar a {managerGeneral.nombre_visible}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -457,8 +1060,52 @@ export default function ProfileScreen() {
           onCancel={() => setLogoutModalVisible(false)}
         />
 
+        <ChangePasswordModal
+          visible={passwordModalVisible}
+          userId={user.id}
+          onClose={() => setPasswordModalVisible(false)}
+          onSuccess={() => {
+            setPasswordModalVisible(false);
+            onRefresh(); // Refresh to get the updated status
+          }}
+        />
+
         <View style={styles.bottomSpace} />
       </ScrollView>
+
+      {/* Message Modal (success/error) */}
+      <Modal
+        visible={messageModal.visible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setMessageModal(prev => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.messageModalOverlay}>
+          <View style={styles.messageModalContainer}>
+            <View style={[styles.messageModalIcon, {
+              backgroundColor: messageModal.type === 'success' ? '#27ae6020' : '#e74c3c20'
+            }]}>
+              <Ionicons
+                name={messageModal.type === 'success' ? 'checkmark-circle' : 'close-circle'}
+                size={64}
+                color={messageModal.type === 'success' ? '#27ae60' : '#e74c3c'}
+              />
+            </View>
+            <Text style={styles.messageModalTitle}>
+              {messageModal.type === 'success' ? 'Éxito' : 'Error'}
+            </Text>
+            <Text style={styles.messageModalMessage}>{messageModal.message}</Text>
+            <TouchableOpacity
+              style={[styles.messageModalBtn, {
+                backgroundColor: messageModal.type === 'success' ? '#27ae60' : '#e74c3c'
+              }]}
+              onPress={() => setMessageModal(prev => ({ ...prev, visible: false }))}
+            >
+              <Text style={styles.messageModalBtnText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -615,12 +1262,11 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   enrollmentCard: {
-    backgroundColor: COLORS.primary + '05',
+    backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-    ...SHADOWS.sm,
+    borderColor: COLORS.border.primary,
     gap: SPACING.md,
   },
   enrollmentHeader: {
@@ -632,6 +1278,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.primary,
+    flex: 1,
   },
   enrollmentStatusRow: {
     flexDirection: 'row',
@@ -648,23 +1295,251 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.inverse,
+    letterSpacing: 0.5,
   },
   paymentMethod: {
     fontSize: TYPOGRAPHY.fontSize.xs,
     color: COLORS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
   },
-  detailsButton: {
+  lockedMessage: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.warning + '10',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  lockedMessageText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: 20,
+  },
+  whatsappButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#25D366',
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.md,
+  },
+  whatsappButtonText: {
+    color: '#fff',
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: '600',
+  },
+  eventoInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  eventoInfoText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  precioContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.primary + '10',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  precioLabel: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  precioValue: {
+    fontSize: TYPOGRAPHY.fontSize.xl,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.primary,
+  },
+  metodoPagoLabel: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+  },
+  metodoPagoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  metodoPagoOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    alignSelf: 'flex-start',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary + '40',
+    backgroundColor: COLORS.surface,
+  },
+  metodoPagoOptionSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  metodoPagoText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.primary,
+  },
+  metodoPagoTextSelected: {
+    color: COLORS.text.inverse,
+  },
+  paymentInfoCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  paymentInfoTitle: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
+  },
+  paymentDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  paymentInfoText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  paymentInfoHint: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.tertiary,
+  },
+  downloadQrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
     marginTop: SPACING.xs,
   },
-  detailsButtonText: {
-    fontSize: TYPOGRAPHY.fontSize.xs,
+  downloadQrText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  paymentQr: {
+    width: '100%',
+    height: 160,
+    marginTop: SPACING.xs,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.background,
+  },
+  comprobanteSection: {
+    gap: SPACING.sm,
+  },
+  comprobanteLabel: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+  },
+  comprobantePreviewRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  comprobantePreview: {
+    width: 150,
+    height: 270,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.background,
+  },
+  comprobanteActions: {
+    flex: 1,
+    gap: SPACING.sm,
+  },
+  comprobanteIconActions: {
+    flexDirection: 'column',
+    gap: SPACING.sm,
+  },
+  comprobanteIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  comprobanteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  comprobanteRemoveButton: {
+    backgroundColor: COLORS.error,
+  },
+  comprobanteButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.inverse,
+  },
+  inscribirseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.xs,
+  },
+  inscribirseBtnText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.inverse,
+    letterSpacing: 0.5,
+  },
+  pendingMessage: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.warning + '10',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  pendingMessageText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.text.secondary,
-    textDecorationLine: 'underline',
+    lineHeight: 20,
+  },
+  pendingDate: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.tertiary,
+    textAlign: 'right',
+  },
+  confirmedMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.success + '10',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  confirmedMessageText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.success,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    lineHeight: 20,
   },
   fighterCard: {
     backgroundColor: COLORS.surface,
@@ -865,6 +1740,56 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   bottomSpace: {
-    height: 100, // Espacio extra para asegurar que nada se corte
+    height: 100,
+  },
+  messageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  messageModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.xl,
+    width: '100%',
+    maxWidth: 360,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border.primary,
+  },
+  messageModalIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.md,
+  },
+  messageModalTitle: {
+    fontSize: TYPOGRAPHY.fontSize.xxl,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: SPACING.sm,
+  },
+  messageModalMessage: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: SPACING.xl,
+  },
+  messageModalBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageModalBtnText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

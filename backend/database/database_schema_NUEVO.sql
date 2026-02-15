@@ -142,7 +142,8 @@ CREATE TABLE peleadores (
 
     -- Datos personales
     apodo VARCHAR(100),
-    fecha_nacimiento DATE NOT NULL,
+    fecha_nacimiento DATE NULL,
+    edad INT NULL,
     peso_actual DECIMAL(5,2) NOT NULL COMMENT 'Peso en kg',
     altura DECIMAL(4,2) COMMENT 'Altura en metros (ej: 1.75)',
 

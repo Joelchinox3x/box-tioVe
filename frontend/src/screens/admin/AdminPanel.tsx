@@ -11,8 +11,11 @@ import AssignOwners from './AssignOwners';
 import PaymentManagement from './PaymentManagement';
 import AdminBannerScreen from './AdminBannerScreen';
 import AdminBrandingScreen from './AdminBrandingScreen';
+import AdminSettingsScreen from './AdminSettingsScreen';
+import AdminAnunciosScreen from './AdminAnunciosScreen';
+import { SettingsService } from '../../services/SettingsService';
 
-type AdminSection = 'dashboard' | 'fighters' | 'clubs' | 'owners' | 'payments' | 'banners' | 'branding';
+type AdminSection = 'dashboard' | 'fighters' | 'clubs' | 'owners' | 'payments' | 'banners' | 'branding' | 'settings' | 'anuncios';
 
 interface Estadisticas {
   peleadores_pendientes: number;
@@ -26,10 +29,35 @@ export default function AdminPanel({ navigation }: any) {
   const [currentSection, setCurrentSection] = useState<AdminSection>('dashboard');
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(true);
+  const [navMode, setNavMode] = useState<'normal' | 'hidden' | 'auto_hide'>('normal');
+  const [navHiddenByAutoHide, setNavHiddenByAutoHide] = useState(false);
 
   useEffect(() => {
     loadEstadisticas();
+    loadNavMode();
   }, []);
+
+  const loadNavMode = async () => {
+    const res = await SettingsService.getSetting('admin_nav_mode');
+    if (res.success && res.value) {
+      setNavMode(res.value as any);
+    }
+  };
+
+  // Para auto_hide: al navegar desde dashboard, ocultar tabs
+  const navigateToSection = (section: AdminSection) => {
+    if (navMode === 'auto_hide' && section !== 'dashboard' && section !== 'settings') {
+      setNavHiddenByAutoHide(true);
+    }
+    setCurrentSection(section);
+  };
+
+  // Determinar si los tabs se deben mostrar
+  const shouldShowTabs = () => {
+    if (navMode === 'hidden') return false;
+    if (navMode === 'auto_hide' && navHiddenByAutoHide) return false;
+    return true;
+  };
 
   const loadEstadisticas = async () => {
     try {
@@ -53,21 +81,21 @@ export default function AdminPanel({ navigation }: any) {
       ) : (
         <>
           <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statCardWrapper} onPress={() => setCurrentSection('fighters')}>
+            <TouchableOpacity style={styles.statCardWrapper} onPress={() => navigateToSection('fighters')}>
               <LinearGradient colors={['#FF416C', '#FF4B2B']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                 <Text style={styles.statNumber}>{estadisticas?.peleadores_pendientes || 0}</Text>
                 <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Pendiente</Text>
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.statCardWrapper} onPress={() => setCurrentSection('fighters')}>
+            <TouchableOpacity style={styles.statCardWrapper} onPress={() => navigateToSection('fighters')}>
               <LinearGradient colors={['#11998e', '#38ef7d']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                 <Text style={styles.statNumber}>{estadisticas?.peleadores_aprobados || 0}</Text>
                 <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Listo</Text>
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.statCardWrapper} onPress={() => setCurrentSection('clubs')}>
+            <TouchableOpacity style={styles.statCardWrapper} onPress={() => navigateToSection('clubs')}>
               <LinearGradient colors={['#2193b0', '#6dd5ed']} style={styles.statCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                 <Text style={styles.statNumber}>{estadisticas?.clubs_activos || 0}</Text>
                 <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>Clubs</Text>
@@ -87,7 +115,7 @@ export default function AdminPanel({ navigation }: any) {
       <Text style={styles.sectionHeader}>GESTIÓN RÁPIDA</Text>
 
       <View style={styles.actionsGrid}>
-        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('fighters')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('fighters')}>
           <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
             <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(231, 76, 60, 0.1)' }]}>
               <Ionicons name="fitness" size={24} color="#e74c3c" />
@@ -97,7 +125,7 @@ export default function AdminPanel({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('clubs')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('clubs')}>
           <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
             <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(52, 152, 219, 0.1)' }]}>
               <Ionicons name="business" size={24} color="#3498db" />
@@ -107,7 +135,7 @@ export default function AdminPanel({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('owners')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('owners')}>
           <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
             <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(241, 196, 15, 0.1)' }]}>
               <Ionicons name="key" size={24} color="#f1c40f" />
@@ -117,7 +145,7 @@ export default function AdminPanel({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('payments')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('payments')}>
           <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
             <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(46, 204, 113, 0.1)' }]}>
               <Ionicons name="cash" size={24} color="#2ecc71" />
@@ -127,7 +155,7 @@ export default function AdminPanel({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('banners')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('banners')}>
           <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
             <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(155, 89, 182, 0.1)' }]}>
               <Ionicons name="images" size={24} color="#9b59b6" />
@@ -137,7 +165,17 @@ export default function AdminPanel({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard} onPress={() => setCurrentSection('branding')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('anuncios')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+              <Ionicons name="megaphone" size={24} color="#3B82F6" />
+            </View>
+            <Text style={styles.actionTitle}>Anuncios</Text>
+            <Text style={styles.actionDesc}>Avisos y Noticias</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('branding')}>
           <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
             <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(52, 73, 94, 0.1)' }]}>
               <Ionicons name="brush" size={24} color="#34495e" />
@@ -156,20 +194,45 @@ export default function AdminPanel({ navigation }: any) {
             <Text style={styles.actionDesc}>Venta de entradas</Text>
           </LinearGradient>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigateToSection('settings')}>
+          <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.actionGradient}>
+            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(149, 165, 166, 0.1)' }]}>
+              <Ionicons name="settings" size={24} color="#95a5a6" />
+            </View>
+            <Text style={styles.actionTitle}>Config</Text>
+            <Text style={styles.actionDesc}>Sistema</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
     </View>
   );
+
+  const sectionHeaders: Record<AdminSection, { title: string; subtitle: string }> = {
+    dashboard: { title: 'PANEL DE CONTROL', subtitle: 'ADMINISTRACIÓN GLOBAL' },
+    fighters:  { title: 'PELEADORES', subtitle: 'GESTIÓN DE PELEADORES' },
+    clubs:     { title: 'CLUBS', subtitle: 'ADMINISTRAR GIMNASIOS' },
+    owners:    { title: 'DUEÑOS', subtitle: 'ASIGNAR PERMISOS' },
+    payments:  { title: 'GESTION DE PAGOS', subtitle: 'INSCRIPCIONES Y COBROS' },
+    banners:   { title: 'BANNERS', subtitle: 'PUBLICIDAD HOME' },
+    branding:  { title: 'BRANDING', subtitle: 'IDENTIDAD VISUAL' },
+    anuncios:  { title: 'ANUNCIOS', subtitle: 'GESTIONAR AVISOS' },
+    settings:  { title: 'CONFIGURACIÓN', subtitle: 'AJUSTES DEL SISTEMA' },
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       <ScreenHeader
-        title="PANEL DE CONTROL"
-        subtitle="ADMINISTRACIÓN GLOBAL"
+        title={sectionHeaders[currentSection].title}
+        subtitle={sectionHeaders[currentSection].subtitle}
         showBackButton={true}
         onBackPress={() => {
           if (currentSection !== 'dashboard') {
             setCurrentSection('dashboard');
+            setNavHiddenByAutoHide(false);
+            // Recargar navMode por si cambió en settings
+            if (currentSection === 'settings') loadNavMode();
           } else {
             navigation.navigate('Profile' as never);
           }
@@ -177,25 +240,33 @@ export default function AdminPanel({ navigation }: any) {
       />
 
       {/* Navegación tipo Tabs/Pills */}
-      <View style={styles.navContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={Platform.OS === 'web'}
-          contentContainerStyle={[styles.navContent, { paddingBottom: Platform.OS === 'web' ? 15 : 0 }]}
-        >
-          {['fighters', 'clubs', 'owners', 'payments', 'banners', 'branding'].map((sec) => (
-            <TouchableOpacity
-              key={sec}
-              style={[styles.pill, currentSection === sec && styles.pillActive]}
-              onPress={() => setCurrentSection(sec as AdminSection)}
-            >
-              <Text style={[styles.pillText, currentSection === sec && styles.pillTextActive]}>
-                {sec.toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      {shouldShowTabs() && (
+        <View style={styles.navContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={Platform.OS === 'web'}
+            contentContainerStyle={[styles.navContent, { paddingBottom: Platform.OS === 'web' ? 15 : 0 }]}
+          >
+            {(['fighters', 'clubs', 'owners', 'payments', 'anuncios', 'banners', 'branding'] as AdminSection[]).map((sec) => {
+              const pillLabels: Record<string, string> = {
+                fighters: 'PELEADORES', clubs: 'CLUBS', owners: 'DUEÑOS',
+                payments: 'PAGOS', anuncios: 'ANUNCIOS', banners: 'BANNERS', branding: 'BRANDING',
+              };
+              return (
+              <TouchableOpacity
+                key={sec}
+                style={[styles.pill, currentSection === sec && styles.pillActive]}
+                onPress={() => navigateToSection(sec)}
+              >
+                <Text style={[styles.pillText, currentSection === sec && styles.pillTextActive]}>
+                  {pillLabels[sec] || sec.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Contenido */}
       {currentSection === 'dashboard' && (
@@ -212,9 +283,13 @@ export default function AdminPanel({ navigation }: any) {
 
       {currentSection === 'payments' && <PaymentManagement />}
 
+      {currentSection === 'anuncios' && <AdminAnunciosScreen />}
+
       {currentSection === 'banners' && <AdminBannerScreen />}
 
       {currentSection === 'branding' && <AdminBrandingScreen />}
+
+      {currentSection === 'settings' && <AdminSettingsScreen />}
     </SafeAreaView>
   );
 }

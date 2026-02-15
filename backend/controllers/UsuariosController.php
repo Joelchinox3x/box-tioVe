@@ -98,9 +98,9 @@ class UsuariosController {
             // Crear usuario espectador
             // tipo_id: 3 = espectador
             $queryUsuario = "INSERT INTO usuarios
-                (nombre, apellidos, email, password_hash, telefono, tipo_id, club_id, foto_perfil)
+                (nombre, apellidos, email, password_hash, telefono, tipo_id, club_id, foto_perfil, es_primer_login)
                 VALUES
-                (:nombre, :apellidos, :email, :password, :telefono, 3, :club_id, :foto_perfil)";
+                (:nombre, :apellidos, :email, :password, :telefono, 3, :club_id, :foto_perfil, 1)";
 
             $stmtUsuario = $this->db->prepare($queryUsuario);
             $password_hash = password_hash($data['password'], PASSWORD_BCRYPT);
@@ -202,6 +202,7 @@ class UsuariosController {
                 $stmtPeleador->bindParam(':usuario_id', $usuario['id']);
                 $stmtPeleador->execute();
                 $peleador = $stmtPeleador->fetch(PDO::FETCH_ASSOC);
+                $peleador['peso'] = $peleador['peso_actual'];
                 $usuario['peleador'] = $peleador;
             }
 
@@ -257,6 +258,7 @@ class UsuariosController {
                 $stmtPeleador->bindParam(':usuario_id', $usuario['id']);
                 $stmtPeleador->execute();
                 $peleador = $stmtPeleador->fetch(PDO::FETCH_ASSOC);
+                $peleador['peso'] = $peleador['peso_actual'];
                 $usuario['peleador'] = $peleador;
             }
 
@@ -275,6 +277,33 @@ class UsuariosController {
                 "success" => false,
                 "message" => "Error al obtener perfil"
             ];
+        }
+    }
+
+    /**
+     * Actualizar contraseña y marcar que ya no es primer login
+     */
+    public function actualizarPassword($data) {
+        if (!isset($data['usuario_id']) || !isset($data['new_password'])) {
+            http_response_code(400);
+            return ["success" => false, "message" => "Faltan datos (usuario_id, new_password)"];
+        }
+
+        try {
+            $query = "UPDATE usuarios SET password_hash = :hash, es_primer_login = 0 WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $hash = password_hash($data['new_password'], PASSWORD_BCRYPT);
+            $stmt->bindParam(':hash', $hash);
+            $stmt->bindParam(':id', $data['usuario_id']);
+            $stmt->execute();
+
+            return [
+                "success" => true,
+                "message" => "Contraseña actualizada correctamente"
+            ];
+        } catch (PDOException $e) {
+            http_response_code(500);
+            return ["success" => false, "message" => "Error al actualizar contraseña", "error" => $e->getMessage()];
         }
     }
 

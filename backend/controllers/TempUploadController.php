@@ -26,33 +26,37 @@ class TempUploadController {
             return ["success" => false, "message" => "Error en la subida del archivo", "code" => $file['error']];
         }
 
-        // Directorio temporal (público)
-        $uploadDir = __DIR__ . '/../files/temp';
+        // Directorio temporal (DENTRO DEL PUBLIC para acceso directo)
+        $uploadDir = __DIR__ . '/../public/uploads/temp';
+        
+        // Aseguramos que el directorio exista (sin generar warnings html)
         if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
+            if (!@mkdir($uploadDir, 0777, true)) {
+                // Si falla, intentamos una ruta alternativa por si acaso
+                $uploadDir = '/var/www/html/public/uploads/temp';
+                if (!is_dir($uploadDir)) {
+                    @mkdir($uploadDir, 0777, true);
+                }
+            }
         }
 
-        // Limpieza básica: Eliminar archivos de más de 1 hora
+        // Limpieza básica
         $this->cleanOldFiles($uploadDir);
 
         $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-        if (empty($ext)) $ext = 'jpg';
+        if (empty($ext)) $ext = 'png';
         
-        // Nombre único
         $fileName = 'tmp_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
         $destination = $uploadDir . '/' . $fileName;
 
-        if (move_uploaded_file($file['tmp_name'], $destination)) {
-            // Construir URL pública
-            // Asumimos que la API está en /api y los files en /files (hermanos en el server real)
-            // Ojo: Esto depende de tu estructura de carpetas en producción. 
-            // Si /backend es root, entonces /files está bien.
-            
-            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+        // Usamos @ para evitar que warnings HTML ensucien el JSON si algo falla
+        if (@move_uploaded_file($file['tmp_name'], $destination)) {
+            // Construir URL pública vía API (Para evitar bloqueos de formato HTML del router SPA)
+            $protocol = "https";
             $host = $_SERVER['HTTP_HOST'];
             
-            // Ajuste para entorno local vs prod si es necesario
-            $publicUrl = "$protocol://$host/backend/files/temp/$fileName";
+            // Usamos la nueva ruta que creamos en index.php
+            $publicUrl = "$protocol://$host/api/temp-content?file=" . urlencode($fileName);
             
             // Si estamos en boxtiove.com, la ruta suele ser directa si apuntamos a la carpeta correcta
             // En producción probablemente sea: https://boxtiove.com/api/files/temp/... o similar
@@ -86,7 +90,7 @@ class TempUploadController {
 
     private function cleanOldFiles($dir) {
         // Borrar archivos modificados hace más de 60 minutos
-        if ($handle = opendir($dir)) {
+        if ($handle = @opendir($dir)) {
             while (false !== ($file = readdir($handle))) {
                 if ($file != "." && $file != "..") {
                     $filepath = $dir . '/' . $file;
@@ -97,7 +101,7 @@ class TempUploadController {
                     }
                 }
             }
-            closedir($handle);
+            @closedir($handle);
         }
     }
 }

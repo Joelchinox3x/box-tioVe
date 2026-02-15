@@ -17,7 +17,7 @@ export const styles = StyleSheet.create({
         overflow: 'hidden',
         ...SHADOWS.md,
         backgroundColor: 'transparent', // Ensure container is transparent so layers show through
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: 'rgba(255, 215, 0, 0.25)',
     },
     cardBg: {
@@ -60,23 +60,69 @@ export const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     recordBadge: {
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
+        backgroundColor: 'rgba(10,10,10,0.25)',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 6,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderColor: 'rgba(255,255,255,0.18)',
         alignItems: 'center',
     },
+    recordBadgeBottomRight: {
+        position: 'absolute',
+        right: SPACING.sm,
+        bottom: SPACING.sm,
+    },
     recordLabel: {
-        fontSize: 8,
+        fontSize: 9,
         color: '#FFD700',
         fontWeight: '900',
+        letterSpacing: 0.6,
     },
     recordValue: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#FFF',
-        fontWeight: 'bold',
+        fontWeight: '800',
+    },
+    recordRow: {
+        flexDirection: 'row',
+        gap: 4,
+    },
+    recordNumber: {
+        fontSize: 14,
+        fontWeight: '900',
+        letterSpacing: 0.3,
+    },
+    recordNumberWin: {
+        color: '#27AE60',
+    },
+    recordNumberLoss: {
+        color: '#E74C3C',
+    },
+    recordNumberDraw: {
+        color: '#F39C12',
+    },
+    recordChip: {
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        borderRadius: 5,
+        minWidth: 26,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    recordChipWin: {
+        backgroundColor: 'rgba(39, 174, 96, 0.9)',
+    },
+    recordChipLoss: {
+        backgroundColor: 'rgba(231, 76, 60, 0.9)',
+    },
+    recordChipDraw: {
+        backgroundColor: 'rgba(243, 156, 18, 0.9)',
+    },
+    recordChipText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '800',
     },
     bottomInfo: {
         gap: 4,

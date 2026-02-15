@@ -78,6 +78,30 @@ export interface EventData {
   peleas_pactadas: FightMatch[];
 }
 
+// Tipos de Anuncios
+export interface Anuncio {
+  id: number;
+  titulo: string;
+  mensaje: string;
+  tipo: 'info' | 'urgente' | 'promo' | 'contacto' | 'reglas';
+  medio: 'texto' | 'imagen' | 'video' | 'link';
+  imagen_filename: string | null;
+  imagen_url: string | null;
+  video_filename: string | null;
+  video_url: string | null;
+  link_url: string | null;
+  link_tipo: 'youtube' | 'tiktok' | 'otro' | null;
+  evento_id: number | null;
+  activo: boolean;
+  fijado: boolean;
+  orden: number;
+  fecha_publicacion: string | null;
+  fecha_expiracion: string | null;
+  fuente: 'admin' | 'telegram';
+  created_at: string;
+  updated_at: string;
+}
+
 // Tipos de Boletos
 export interface TipoBoleto {
   id: number;

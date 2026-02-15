@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/Database.php';
+require_once __DIR__ . '/../config/Config.php';
 
 class CardTemplatesController {
     private $base_dir;
@@ -8,10 +9,8 @@ class CardTemplatesController {
     public function __construct() {
         $this->base_dir = __DIR__ . '/../files/card_templates/';
         
-        // Determinar URL base
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
-        $host = $_SERVER['HTTP_HOST'];
-        $this->base_url = "$protocol://$host/files/card_templates/";
+        // Usar config centralizada para evitar http incorrecto detrás de proxy
+        $this->base_url = Config::BASE_URL . '/files/card_templates/';
     }
 
     /**

@@ -14,6 +14,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { Config } from '../config/config';
+import { getCategoria } from '../utils/categories';
 
 export default function FighterDetailScreen() {
   const navigation = useNavigation<any>();
@@ -24,7 +26,7 @@ export default function FighterDetailScreen() {
   const getImageUrl = (path: string | null | undefined) => {
     if (!path) return null;
     if (path.startsWith('http')) return path;
-    return `https://boxtiove.com/${path}`;
+    return `${Config.BASE_URL}/${path}`;
   };
 
   const handleShare = async () => {
@@ -124,7 +126,7 @@ export default function FighterDetailScreen() {
             <DetailItem icon="body" label="Edad" value={`${fighter.edad} años`} />
             <DetailItem icon="barbell" label="Peso" value={`${fighter.peso || fighter.peso_actual} kg`} />
             <DetailItem icon="resize" label="Altura" value={`${fighter.altura} m`} />
-            <DetailItem icon="trophy" label="Categoría" value={fighter.categoria || 'N/A'} />
+            <DetailItem icon="trophy" label="Categoría" value={fighter.categoria || getCategoria(fighter.peso || fighter.peso_actual)} />
             <DetailItem icon="fitness" label="Estilo" value={fighter.estilo || 'N/A'} />
             <DetailItem icon="business" label="Club" value={fighter.club_nombre || 'Indep.'} />
           </View>

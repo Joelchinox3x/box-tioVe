@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../config/Config.php';
+
 /**
  * Controlador de Promociones
  * Sistema para compartir/promocionar peleadores
@@ -76,7 +78,7 @@ class PromocionesController {
      * Generar link para compartir
      */
     private function generarLinkCompartir($peleador_id, $plataforma) {
-        $base_url = "http://34.44.67.166"; // Cambiar en producción
+        $base_url = Config::getBaseUrl();
         $url_peleador = "$base_url/peleador/$peleador_id";
 
         $links = [

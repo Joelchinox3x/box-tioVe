@@ -50,6 +50,7 @@ interface ImageAdjustmentControlsProps {
     onOpenBorders: () => void;
     onOpenStickers: () => void;
     onRandomize: () => void;
+    onOpenEditor?: () => void;
 }
 
 const AutoRepeatButton: React.FC<{
@@ -160,7 +161,8 @@ export const ImageAdjustmentControls: React.FC<ImageAdjustmentControlsProps> = (
     fighterLayers,
     onLaunchCamera,
     onLaunchGallery,
-    onRemoveLayer
+    onRemoveLayer,
+    onOpenEditor
 }) => {
     // Local state for expandable layer button
     const [showLayerOptions, setShowLayerOptions] = React.useState(false);
@@ -195,10 +197,10 @@ export const ImageAdjustmentControls: React.FC<ImageAdjustmentControlsProps> = (
                         User said: "boton subjr o cambiar se va y en vez de eso un solo boton de +"
                         So we remove the left 'Subir' button. 
                     */}
-                    {/* Botón de AGREGAR (Tipo Speed Dial / Popover) */}
-                    {/* Botón de AGREGAR (Tipo Speed Dial / Popover) */}
-                    {(!fighterLayers || fighterLayers.length < 3) && (
-                        <View style={{ flexDirection: 'row', gap: 6, paddingRight: 8, borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.1)', marginRight: 6, position: 'relative', zIndex: 100 }}>
+                    {/* Botón de AGREGAR (Tipo Speed Dial / Popover) O EDITOR (Si está lleno) */}
+                    <View style={{ flexDirection: 'row', gap: 6, paddingRight: 8, borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.1)', marginRight: 6, position: 'relative', zIndex: 100 }}>
+                        {(!fighterLayers || fighterLayers.length < 3) ? (
+                            // MODO: AGREGAR (Menos de 3 fotos)
                             <View style={{ alignItems: 'center', gap: 6 }}>
                                 {/* Options Popover (Emergente Encima) */}
                                 {showLayerOptions && (
@@ -267,8 +269,21 @@ export const ImageAdjustmentControls: React.FC<ImageAdjustmentControlsProps> = (
                                     <Ionicons name={showLayerOptions ? "close" : "add"} size={24} color="#000" />
                                 </TouchableOpacity>
                             </View>
-                        </View>
-                    )}
+                        ) : (
+                            // MODO: EDITAR (3 fotos, lleno) - Botón Azulito
+                            <TouchableOpacity
+                                onPress={onOpenEditor}
+                                style={{
+                                    width: 36, height: 36, borderRadius: 18,
+                                    backgroundColor: 'rgba(27, 117, 168, 0.4)', // Azulito transparente
+                                    justifyContent: 'center', alignItems: 'center',
+                                    borderWidth: 1, borderColor: '#4fc3f7'
+                                }}
+                            >
+                                <Ionicons name="pencil" size={20} color="#4fc3f7" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
                     <View style={{ flex: 1 }}>
                         <View style={{ alignItems: 'flex-start' }}>

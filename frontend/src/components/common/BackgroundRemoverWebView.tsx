@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
+import { Config } from '../../config/config';
 
 interface BackgroundRemoverWebViewProps {
     visible: boolean;
@@ -18,14 +19,42 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
     onClose,
     onImageProcessed
 }) => {
-    const webViewRef = useRef<WebView>(null);
+    // URL via API desde configuración centralizada
+    const BASE_WEB_URL = Config.BG_REMOVER_ENDPOINT;
+    const uri = imageUrl ? `${BASE_WEB_URL}?img=${encodeURIComponent(imageUrl)}` : BASE_WEB_URL;
+
+    // Estado para controlar el modo de visualización
+    const [viewMode, setViewMode] = useState<'loading_config' | 'debug' | 'invisible'>('loading_config');
     const insets = useSafeAreaInsets();
+    const webViewRef = useRef<WebView>(null);
+    // Aunque no lo usemos en la UI ahora mismo, lo definimos para evitar el error en el WebView prop
     const [loading, setLoading] = useState(true);
+    // Estado para logs en tiempo real (Invisible Mode)
+    const [progressLog, setProgressLog] = useState("Iniciando...");
 
-    // URL base de tu herramienta web
-    const BASE_WEB_URL = "https://boxtiove.com/tools/background-remover";
+    // 1. Obtener configuración del servidor al montar
+    React.useEffect(() => {
+        if (visible) {
+            // Reset logs
+            setProgressLog("Iniciando...");
+            checkServerSettings();
+        }
+    }, [visible]);
 
-    const uri = imageUrl ? `${BASE_WEB_URL}?img=${encodeURIComponent(imageUrl)}&mode=embed` : BASE_WEB_URL;
+    const checkServerSettings = async () => {
+        try {
+            const response = await fetch(Config.SETTINGS_BG_REMOVER_MODE);
+            const data = await response.json();
+
+            if (data.success && data.value === 'invisible') {
+                setViewMode('invisible');
+            } else {
+                setViewMode('debug');
+            }
+        } catch (error) {
+            setViewMode('debug');
+        }
+    };
 
     const INJECTED_JAVASCRIPT = `
       (function() {
@@ -39,6 +68,16 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
             if (data.type === 'IMAGE_PROCESSED' && data.url) {
                 onImageProcessed(data.url);
             }
+            if (data.type === 'LOG') {
+                setProgressLog(data.payload);
+            }
+            if (data.type === 'ERROR') {
+                // Si falla en invisible, mostramos alerta nativa
+                if (viewMode === 'invisible') {
+                    // alert('Error IA: ' + data.payload); 
+                    // Opcional: Cerrar silenciosamente o avisar
+                }
+            }
             if (data.type === 'CLOSE') {
                 onClose();
             }
@@ -49,38 +88,64 @@ export const BackgroundRemoverWebView: React.FC<BackgroundRemoverWebViewProps> =
 
     if (!visible) return null;
 
+    // RENDERIZADO INVISIBLE (Nativo puro)
+    if (viewMode === 'invisible') {
+        return (
+            <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+                <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
+                    <StatusBar barStyle="light-content" />
+
+                    <View style={styles.nativeLoaderBox}>
+                        <ActivityIndicator size="large" color={COLORS.primary} />
+                        <Text style={styles.nativeLoaderText}>PROCESANDO CON IA...</Text>
+                        <Text style={styles.nativeLoaderSub}>{progressLog}</Text>
+                    </View>
+
+                    {/* El WebView existe pero está oculto (height 0) */}
+                    <View style={{ height: 0, width: 0, overflow: 'hidden' }}>
+                        <WebView
+                            ref={webViewRef}
+                            source={{ uri }}
+                            javaScriptEnabled={true}
+                            domStorageEnabled={true}
+                            injectedJavaScript={INJECTED_JAVASCRIPT}
+                            onMessage={handleMessage}
+                            // Importante para que corra en background (a veces)
+                            androidLayerType="hardware"
+                        />
+                    </View>
+                </View>
+            </Modal>
+        );
+    }
+
+    // RENDERIZADO DEBUG (El de siempre)
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
             <View style={[styles.container, { backgroundColor: '#000' }]}>
                 <StatusBar barStyle="light-content" />
-                {/* Header Simple */}
                 <View style={[styles.header, { paddingTop: insets.top, height: 60 + insets.top }]}>
-                    <Text style={styles.title}>MAGIC ERASER PRO</Text>
+                    <Text style={styles.title}>MAGIC ERASER DEBUG</Text>
                     <Pressable onPress={onClose} style={[styles.closeBtn, { top: insets.top }]}>
                         <Ionicons name="close" size={26} color="#FFF" />
                     </Pressable>
                 </View>
 
                 <View style={styles.webViewContainer}>
-                    <WebView
-                        ref={webViewRef}
-                        source={{ uri }}
-                        style={{ flex: 1, backgroundColor: '#000' }}
-                        javaScriptEnabled={true}
-                        domStorageEnabled={true}
-                        onLoadStart={() => setLoading(true)}
-                        onLoadEnd={() => setLoading(false)}
-                        injectedJavaScript={INJECTED_JAVASCRIPT}
-                        onMessage={handleMessage}
-                        allowFileAccess={true}
-                        allowFileAccessFromFileURLs={true}
-                    />
-
-                    {loading && (
-                        <View style={styles.loadingOverlay}>
-                            <ActivityIndicator size="large" color={COLORS.primary} />
-                            <Text style={styles.loadingText}>Iniciando Motor IA...</Text>
-                        </View>
+                    {viewMode === 'loading_config' ? (
+                        <ActivityIndicator size="small" color="#FFF" style={{ marginTop: 20 }} />
+                    ) : (
+                        <WebView
+                            ref={webViewRef}
+                            source={{ uri }}
+                            style={{ flex: 1, backgroundColor: '#000' }}
+                            javaScriptEnabled={true}
+                            domStorageEnabled={true}
+                            onLoadStart={() => setLoading(true)}
+                            onLoadEnd={() => setLoading(false)}
+                            injectedJavaScript={INJECTED_JAVASCRIPT}
+                            onMessage={handleMessage}
+                        />
                     )}
                 </View>
             </View>
@@ -122,9 +187,30 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 10
     },
-    loadingText: {
-        color: '#888',
-        marginTop: 10,
+    // Estilos nuevos para modo invisible
+    nativeLoaderBox: {
+        backgroundColor: '#1A1A1A',
+        padding: 30,
+        borderRadius: 20,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+        elevation: 10
+    },
+    nativeLoaderText: {
+        color: COLORS.primary,
+        marginTop: 20,
+        fontSize: 16,
+        fontWeight: 'bold',
+        letterSpacing: 1
+    },
+    nativeLoaderSub: {
+        color: '#666',
+        marginTop: 8,
         fontSize: 12
     }
 });

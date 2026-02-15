@@ -1,4 +1,5 @@
 import api from './api';
+import { Config } from '../config/config';
 
 export class AdminService {
   /**
@@ -18,6 +19,15 @@ export class AdminService {
   }
 
   /**
+   * Obtener TODOS los peleadores con filtro opcional
+   * @param filtro - 'todos' | 'pendiente' | 'aprobado' | 'rechazado'
+   */
+  static async getPeleadores(filtro: string = 'todos') {
+    const response = await api.get(`/admin/peleadores?filtro=${filtro}`);
+    return response.data;
+  }
+
+  /**
    * Aprobar o rechazar peleador
    */
   static async cambiarEstadoPeleador(peleadorId: number, estado: 'aprobado' | 'rechazado', notas?: string) {
@@ -27,12 +37,39 @@ export class AdminService {
     console.log('📤 AdminService - Enviando petición PUT:', {
       url,
       payload,
-      fullUrl: `https://boxtiove.com/api${url}`
+      fullUrl: `${Config.API_URL}${url}`
     });
 
     const response = await api.put(url, payload);
 
     console.log('📥 AdminService - Respuesta recibida:', response.data);
+    return response.data;
+  }
+
+  /**
+   * Editar datos de un peleador
+   */
+  static async editPeleador(peleadorId: number, data: Record<string, any>) {
+    const url = `/admin/peleadores/${peleadorId}`;
+    const response = await api.patch(url, data);
+    return response.data;
+  }
+
+  /**
+   * Eliminar peleador y todos sus datos relacionados
+   */
+  static async deletePeleador(peleadorId: number) {
+    const url = `/admin/peleadores/${peleadorId}`;
+
+    console.log('🗑️ AdminService - Eliminando peleador:', {
+      url,
+      peleadorId,
+      fullUrl: `${Config.API_URL}${url}`
+    });
+
+    const response = await api.delete(url);
+
+    console.log('✅ AdminService - Peleador eliminado:', response.data);
     return response.data;
   }
 
@@ -138,6 +175,82 @@ export class AdminService {
       precio_inscripcion_peleador: precio,
     });
     return response.data;
+  }
+
+  /**
+   * ========================================
+   * MÉTODOS DE PAGO
+   * ========================================
+   */
+
+  static async getMetodosPago(params?: { activo?: number }) {
+    const query = params?.activo !== undefined ? `?activo=${params.activo}` : '';
+    const response = await api.get(`/admin/metodos-pago${query}`);
+    return response.data;
+  }
+
+  static async crearMetodoPago(data: {
+    codigo: string;
+    nombre: string;
+    requiere_comprobante?: number;
+    activo?: number;
+    orden?: number;
+    qr_imagen_url?: string | null;
+    telefono_receptor?: string | null;
+    nombre_receptor?: string | null;
+  }) {
+    const response = await api.post('/admin/metodos-pago', data);
+    return response.data;
+  }
+
+  static async actualizarMetodoPago(
+    metodoId: number,
+    data: {
+      codigo?: string;
+      nombre?: string;
+      requiere_comprobante?: number;
+      activo?: number;
+      orden?: number;
+      qr_imagen_url?: string | null;
+      telefono_receptor?: string | null;
+      nombre_receptor?: string | null;
+    }
+  ) {
+    const response = await api.put(`/admin/metodos-pago/${metodoId}`, data);
+    return response.data;
+  }
+
+  /**
+   * Subir imagen QR para método de pago
+   * Usa fetch nativo como fighterService para evitar problemas con multipart
+   */
+  static async uploadQRImage(formData: FormData) {
+    const response = await fetch(`${Config.API_URL}/admin/metodos-pago/upload-qr`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    const rawText = await response.text();
+
+    let result;
+    try {
+      // Intentar extraer solo el JSON si hay warnings de PHP antes
+      const jsonMatch = rawText.match(/\{.*\}$/s);
+      const jsonText = jsonMatch ? jsonMatch[0] : rawText;
+      result = JSON.parse(jsonText);
+    } catch (e) {
+      console.error('❌ Failed to parse JSON. Raw response:', rawText);
+      throw new Error(`Server returned invalid response: ${rawText.substring(0, 500)}`);
+    }
+
+    if (!response.ok) {
+      throw { response: { data: result, status: response.status } };
+    }
+
+    return result;
   }
 
 

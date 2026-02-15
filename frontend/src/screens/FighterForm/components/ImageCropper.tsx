@@ -6,19 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, SHADOWS } from '../../../constants/theme';
 import { useBackgroundRemoval } from '../../../hooks/useBackgroundRemoval';
 import { BackgroundRemoverWebView } from '../../../components/common/BackgroundRemoverWebView';
+import { ImageEffectCanvas } from '../../../components/common/ImageEffectCanvas';
 import * as Haptics from 'expo-haptics';
-import {
-    ColorMatrix,
-    concatColorMatrices,
-    contrast,
-    saturate,
-    brightness
-} from 'react-native-color-matrix-image-filters';
+import * as FileSystem from 'expo-file-system/legacy';
+// import { ColorMatrix, concatColorMatrices, saturate, contrast, brightness } from 'react-native-color-matrix-image-filters'; // REMOVED: Migrated to Skia
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Safety Check: Detect if the native module for filters is actually linked/available (prevents Red Screen in Expo Go)
-const HAS_NATIVE_FILTERS = Platform.OS !== 'web' && !!UIManager.getViewManagerConfig('CMIFColorMatrixImageFilter');
+// REMOVED: HAS_NATIVE_FILTERS logic since Skia works everywhere
+// const HAS_NATIVE_FILTERS = Platform.OS !== 'web'; 
 
 interface ImageCropperProps {
     visible: boolean;
@@ -77,19 +73,6 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
     const gridOpacity = useRef(new Animated.Value(0)).current;
 
     // PRESET MATRICES (Parity with Web CSS filters)
-    const getFilterMatrix = (preset: string): any => {
-        if (preset === 'original') return undefined;
-        try {
-            // FIX: concatColorMatrices takes REST arguments, not an array
-            if (preset === 'grit') return concatColorMatrices(contrast(1.4), saturate(0.6), brightness(0.9));
-            if (preset === 'vibrant') return concatColorMatrices(contrast(1.1), saturate(1.5), brightness(1.1));
-            if (preset === 'bw') return concatColorMatrices(contrast(1.2), saturate(0), brightness(1));
-            if (preset === 'cinematic') return concatColorMatrices(contrast(1.5), saturate(0.8), brightness(0.85));
-        } catch (e) {
-            console.error('Filter matrix error:', e);
-        }
-        return undefined;
-    };
 
     const STAGE_WIDTH = WINDOW_WIDTH > 600 ? 500 : Math.min(WINDOW_WIDTH, 600);
     const STAGE_HEIGHT = Math.max(300, WINDOW_HEIGHT - 320);
@@ -108,13 +91,20 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 
     useEffect(() => { displayImageSizeRef.current = displayImageSize; }, [displayImageSize]);
 
-    // Initialization
+    // Reset when modal closes or opens with a new image
     useEffect(() => {
         if (visible) {
             setSelectedPreset('original');
             setEffectMode('none');
             setEffectColor('#00FFFF');
-            if (imageUri) setCurrentImageUri(imageUri);
+            if (imageUri) {
+                // Si la imagen de props es distinta a lo que tenemos, reseteamos todo
+                setCurrentImageUri(imageUri);
+            }
+        } else {
+            // Limpieza al cerrar para evitar "fantasmas" de la edición anterior
+            setReady(false);
+            setCurrentImageUri(null);
         }
     }, [visible, imageUri]);
 
@@ -124,6 +114,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
             setReady(false);
             (async () => {
                 try {
+                    console.log("📏 Calculando dimensiones para:", uriToLoad);
                     const info = await ImageManipulator.manipulateAsync(uriToLoad, [], {});
                     const { width: w, height: h } = info;
                     setImageSize({ width: w, height: h });
@@ -131,23 +122,32 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                     const stageRatio = STAGE_WIDTH / STAGE_HEIGHT;
                     const imgRatio = w / h;
                     let dw, dh;
+
+                    // Lógica de "Expandida" (Fit en el área visible)
                     if (imgRatio > stageRatio) {
-                        dw = STAGE_WIDTH; dh = STAGE_WIDTH / imgRatio;
+                        dw = STAGE_WIDTH;
+                        dh = STAGE_WIDTH / imgRatio;
                     } else {
-                        dh = STAGE_HEIGHT; dw = STAGE_HEIGHT * imgRatio;
+                        dh = STAGE_HEIGHT;
+                        dw = STAGE_HEIGHT * imgRatio;
                     }
+
                     setDisplayImageSize({ width: dw, height: dh });
 
-                    // Initial Crop Box (Full Fit)
+                    // RESET TOTAL: Siempre al máximo posible (expandida)
                     animX.setValue(0);
                     animY.setValue(0);
                     animW.setValue(dw);
                     animH.setValue(dh);
+
                     cropRef.current = { x: 0, y: 0, width: dw, height: dh };
+
+                    console.log(`✅ Inicializado: ${dw}x${dh} (Original: ${w}x${h})`);
                     setReady(true);
                 } catch (err) {
                     console.error("Size detection error:", err);
-                    onClose();
+                    // No cerramos el modal aquí por si es un error temporal
+                    setReady(true);
                 }
             })();
         }
@@ -317,22 +317,23 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                                 {...mainResponder.panHandlers}
                                 style={{ width: displayImageSize.width, height: displayImageSize.height, position: 'relative', overflow: 'hidden' }}
                             >
-                                {/* THE IMAGE (Wrapped with Color Matrices for real-time filters - Guarded against crashes) */}
-                                {(selectedPreset !== 'original' && HAS_NATIVE_FILTERS) ? (
-                                    <ColorMatrix matrix={getFilterMatrix(selectedPreset)}>
-                                        <Image source={{ uri: currentImageUri! }} style={{ width: displayImageSize.width, height: displayImageSize.height }} resizeMode="contain" />
-                                    </ColorMatrix>
-                                ) : (
-                                    <Image source={{ uri: currentImageUri! }} style={{ width: displayImageSize.width, height: displayImageSize.height }} resizeMode="contain" />
-                                )}
+                                <ImageEffectCanvas
+                                    key={currentImageUri} // Force reload when image changes (e.g. bg removal)
+                                    imageUri={currentImageUri}
+                                    width={displayImageSize.width}
+                                    height={displayImageSize.height}
+                                    effect={effectMode}
+                                    preset={selectedPreset} // Pasa el preset (grit, vibrant, etc.)
+                                    primaryColor={effectColor}
+                                />
 
-                                {/* SHADOW OVERLAYS (Professional Dimming - Fixed with 1px overlap to prevent pixel bleeding) */}
+                                {/* SHADOW OVERLAYS (Professional Dimming) */}
                                 <Animated.View style={[styles.overlay, { top: 0, left: 0, right: 0, height: Animated.add(animY, 1) }]} pointerEvents="none" />
                                 <Animated.View style={[styles.overlay, { top: Animated.add(Animated.add(animY, animH), -1), left: 0, right: 0, bottom: 0 }]} pointerEvents="none" />
                                 <Animated.View style={[styles.overlay, { top: animY, left: 0, width: Animated.add(animX, 1), height: animH }]} pointerEvents="none" />
                                 <Animated.View style={[styles.overlay, { top: animY, left: Animated.add(Animated.add(animX, animW), -1), right: 0, height: animH }]} pointerEvents="none" />
 
-                                {/* THE CROP BOX CONTAINER (PointerEvents none so it doesn't block background mainResponder) */}
+                                {/* THE CROP BOX CONTAINER */}
                                 <Animated.View
                                     style={{
                                         position: 'absolute',
@@ -347,19 +348,19 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                                     }}
                                     pointerEvents="none"
                                 >
-                                    {/* GRID LINES (3x3 Guide - Animated Opacity) */}
+                                    {/* GRID LINES (3x3 Guide) */}
                                     <Animated.View style={[styles.gridLineV, { opacity: gridOpacity, left: '33.3%' }]} pointerEvents="none" />
                                     <Animated.View style={[styles.gridLineV, { left: '66.6%', opacity: gridOpacity }]} pointerEvents="none" />
                                     <Animated.View style={[styles.gridLineH, { opacity: gridOpacity, top: '33.3%' }]} pointerEvents="none" />
                                     <Animated.View style={[styles.gridLineH, { top: '66.6%', opacity: gridOpacity }]} pointerEvents="none" />
 
-                                    {/* VISUAL CORNERS (L-Shaped - WhatsApp Style) */}
+                                    {/* VISUAL CORNERS (L-Shaped) */}
                                     <View style={[styles.cornerL, { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4 }]} pointerEvents="none" />
                                     <View style={[styles.cornerL, { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4 }]} pointerEvents="none" />
                                     <View style={[styles.cornerL, { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4 }]} pointerEvents="none" />
                                     <View style={[styles.cornerL, { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4 }]} pointerEvents="none" />
 
-                                    {/* TOUCH DOTS (Visual guides for grabbing) */}
+                                    {/* TOUCH DOTS */}
                                     <View style={[styles.touchDot, { top: -6, left: -6 }]} pointerEvents="none" />
                                     <View style={[styles.touchDot, { top: -6, right: -6 }]} pointerEvents="none" />
                                     <View style={[styles.touchDot, { bottom: -6, left: -6 }]} pointerEvents="none" />
@@ -500,9 +501,41 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
                 visible={showWebRemover}
                 imageUrl={tempImageUrl}
                 onClose={() => setShowWebRemover(false)}
-                onImageProcessed={(newUrl: string) => {
-                    setCurrentImageUri(newUrl);
-                    setShowWebRemover(false);
+                onImageProcessed={async (remoteUrl: string) => {
+                    try {
+                        console.log("📥 Imagen procesada recibida:", remoteUrl);
+
+                        // Si es web, no necesitamos descargar localmente
+                        if (Platform.OS === 'web') {
+                            setCurrentImageUri(remoteUrl);
+                            setShowWebRemover(false);
+                            return;
+                        }
+
+                        // ESTRATEGIA NATIVA: Guardar a caché local para compatibilidad Skia
+                        const filename = `bg_removed_${Date.now()}.png`;
+                        const localPath = `${FileSystem.cacheDirectory}${filename}`;
+
+                        if (remoteUrl.startsWith('data:')) {
+                            console.log("💾 Guardando Data URI a cache local...");
+                            // Extraer solo la parte base64 (data:image/png;base64,xxxx)
+                            const base64Part = remoteUrl.split(',')[1];
+                            await FileSystem.writeAsStringAsync(localPath, base64Part, {
+                                encoding: FileSystem.EncodingType.Base64
+                            });
+                            setCurrentImageUri(localPath);
+                        } else {
+                            console.log("💾 Descargando result a cache local...");
+                            const downloadResult = await FileSystem.downloadAsync(remoteUrl, localPath);
+                            console.log("✅ Descarga completa:", downloadResult.uri);
+                            setCurrentImageUri(downloadResult.uri);
+                        }
+                    } catch (err) {
+                        console.error("Error downloading processed image:", err);
+                        alert("Error al procesar la imagen localmente");
+                    } finally {
+                        setShowWebRemover(false);
+                    }
                 }}
             />
         </Modal >

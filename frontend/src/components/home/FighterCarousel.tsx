@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ImageBackground, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants/theme';
+import { Config } from '../../config/config';
 
 interface Fighter {
   id?: number;
@@ -52,7 +53,7 @@ export const FighterCarousel: React.FC<FighterCarouselProps> = ({
           >
             {fighter.foto_perfil ? (
               <ImageBackground
-                source={{ uri: fighter.foto_perfil }}
+                source={{ uri: fighter.foto_perfil?.startsWith('http') ? fighter.foto_perfil : `${Config.BASE_URL}/${fighter.foto_perfil}` }}
                 style={styles.fighterImage}
                 imageStyle={styles.fighterImageStyle}
               >

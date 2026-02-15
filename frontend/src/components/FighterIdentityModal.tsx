@@ -1,11 +1,14 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity, Dimensions, Platform, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity, Dimensions, Platform, ImageBackground, Image, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { createTextShadow } from '../utils/shadows';
 import { AdminService } from '../services/AdminService';
 import { FighterCard } from './common/FighterCard';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+import { MotivationalQuote } from './common/MotivationalQuote';
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +25,10 @@ interface FighterIdentityModalProps {
         photoUri?: string | null;
         clubName?: string;
         record?: string;
+        bakedUrl?: string | null;
+        compositionJson?: string | null;
+        edad?: number;
+        altura?: number;
     };
 }
 
@@ -34,9 +41,56 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const [companyLogoUri, setCompanyLogoUri] = React.useState<string | null>(null);
+    const [imageError, setImageError] = React.useState(false);
+
+    const parsedComposition = React.useMemo(() => {
+        if (!fighter.compositionJson) return null;
+        try {
+            return JSON.parse(fighter.compositionJson);
+        } catch {
+            return null;
+        }
+    }, [fighter.compositionJson]);
+
+    const normalizeUrl = (url?: string | null) => {
+        if (!url) return null;
+        return url.startsWith('http') ? url : `${url}`;
+    };
+
+    const compositionAssets = React.useMemo(() => {
+        if (!parsedComposition) return null;
+        const backgroundUri = normalizeUrl(parsedComposition?.background?.url);
+        const borderUri = normalizeUrl(parsedComposition?.border?.url);
+        const compLogo = normalizeUrl(parsedComposition?.companyLogo?.url);
+        const layers = Array.isArray(parsedComposition?.layers)
+            ? parsedComposition.layers.map((layer: any) => ({
+                ...layer,
+                uri: normalizeUrl(layer.uri) || layer.uri,
+            }))
+            : [];
+        const stickers = Array.isArray(parsedComposition?.stickers) ? parsedComposition.stickers : [];
+        const selectedStickers = stickers.map((s: any) => normalizeUrl(s.url) || s.url).filter(Boolean);
+        const stickerTransforms = stickers.reduce((acc: any, s: any) => {
+            const key = normalizeUrl(s.url) || s.url;
+            if (key) acc[key] = s.transform || { x: 0, y: 0, scale: 1, rotation: 0, flipX: false };
+            return acc;
+        }, {});
+
+        return {
+            backgroundUri,
+            borderUri,
+            companyLogoUri: compLogo,
+            fighterLayers: layers,
+            selectedStickers,
+            stickerTransforms
+        };
+    }, [parsedComposition]);
 
     useEffect(() => {
         if (visible) {
+            setImageError(false); // Reset error state on open
+            console.log("🔍 [Modal] Props actualizadas. BakedUrl:", fighter.bakedUrl);
+
             // Fetch branding
             const fetchBranding = async () => {
                 try {
@@ -53,12 +107,13 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
             Animated.parallel([
                 Animated.spring(scaleAnim, {
                     toValue: 1,
-                    friction: 6,
+                    friction: 8,
+                    tension: 40,
                     useNativeDriver: Platform.OS !== 'web',
                 }),
                 Animated.timing(opacityAnim, {
                     toValue: 1,
-                    duration: 500,
+                    duration: 400,
                     useNativeDriver: Platform.OS !== 'web',
                 }),
             ]).start();
@@ -66,7 +121,73 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
             scaleAnim.setValue(0);
             opacityAnim.setValue(0);
         }
-    }, [visible]);
+    }, [visible, fighter.bakedUrl]);
+
+    const handleShare = async () => {
+        try {
+            if (Platform.OS === 'web') {
+                const toHdUrl = (url: string) => {
+                    const clean = url.split('?')[0];
+                    if (clean.endsWith('.png')) {
+                        return url.replace(/\.png(\?.*)?$/, '_HD.png$1');
+                    }
+                    return url;
+                };
+                const hdUrl = fighter.bakedUrl ? toHdUrl(fighter.bakedUrl) : '';
+                const fullName = `${fighter.nombre || ''} ${fighter.apellidos || ''}`.trim();
+                const message = `¡Ya soy un peleador oficial de Box TioVE! 🥊\n\nNombre: ${fullName}\nApodo: ${fighter.apodo || ''}\n\nMi tarjeta HD: ${hdUrl || 'Pendiente'}\n\n¡Nos vemos en el ring! 🔥`;
+                if (typeof window !== 'undefined') {
+                    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+                } else {
+                    Alert.alert('Compartir', 'La función de compartir no está disponible en web.');
+                }
+                return;
+            }
+
+            let uriToShare = '';
+
+            if (fighter.bakedUrl) {
+                const toHdUrl = (url: string) => {
+                    const clean = url.split('?')[0];
+                    if (clean.endsWith('.png')) {
+                        return url.replace(/\.png(\?.*)?$/, '_HD.png$1');
+                    }
+                    return url;
+                };
+
+                console.log("📥 Descargando imagen quemada para compartir...");
+                const filename = `fighter_card_${Date.now()}.png`;
+                const downloadPath = `${FileSystem.cacheDirectory}${filename}`;
+
+                const hdUrl = toHdUrl(fighter.bakedUrl);
+                try {
+                    const downloadResult = await FileSystem.downloadAsync(
+                        hdUrl,
+                        downloadPath
+                    );
+                    uriToShare = downloadResult.uri;
+                } catch (e) {
+                    const downloadResult = await FileSystem.downloadAsync(
+                        fighter.bakedUrl,
+                        downloadPath
+                    );
+                    uriToShare = downloadResult.uri;
+                }
+            } else {
+                Alert.alert('Aviso', 'Tu tarjeta aún se está procesando. Por favor, intenta compartirla en unos momentos desde tu perfil.');
+                return;
+            }
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uriToShare);
+            } else {
+                Alert.alert('Error', 'Compartir no está disponible en este dispositivo');
+            }
+        } catch (error) {
+            console.error('Error sharing card:', error);
+            Alert.alert('Error', 'No se pudo generar la imagen para compartir');
+        }
+    };
 
     if (!visible) return null;
 
@@ -85,30 +206,79 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
                     <ImageBackground
                         source={require('../../assets/fighter_bg.png')}
                         style={styles.bgImage}
-                        imageStyle={{ borderRadius: BORDER_RADIUS.xl, opacity: 0.4 }}
+                        imageStyle={{ borderRadius: BORDER_RADIUS.xl, opacity: 0.2 }}
                     >
                         <LinearGradient
-                            colors={['rgba(0,0,0,0.85)', 'rgba(5,5,5,0.95)']}
+                            colors={['rgba(15,15,15,0.95)', 'rgba(5,5,5,0.98)']}
                             style={styles.gradient}
                         >
-                            <Text style={styles.title}>¡YA ERES UN PELEADOR!</Text>
-                            <Text style={styles.subtitle}>Tu registro ya está activo en Box TioVE</Text>
+                            <View style={styles.headerIndicator} />
+
+                            <View style={styles.titleContainer}>
+                                <Text style={styles.title}>¡YA ERES UN PELEADOR!</Text>
+                                <Text style={styles.subtitle}>Tu registro ya está activo en Box TioVE</Text>
+                            </View>
 
                             <View style={styles.cardContainer}>
-                                <FighterCard
-                                    fighter={fighter}
-                                    variant="large"
-                                    companyLogoUri={companyLogoUri}
-                                />
+                                {fighter.bakedUrl && !imageError ? (
+                                    <View style={styles.bakedCardWrapper}>
+                                        <ImageBackground
+                                            source={{ uri: fighter.bakedUrl }}
+                                            style={styles.bakedImage}
+                                            imageStyle={{ borderRadius: 12 }}
+                                            resizeMode="contain"
+                                            onLoadStart={() => console.log("⏳ [Image] Iniciando carga:", fighter.bakedUrl)}
+                                            onLoad={() => console.log("✅ [Image] Carga completada:", fighter.bakedUrl)}
+                                            onError={(e) => {
+                                                console.log("❌ [Image] Error cargando (" + fighter.bakedUrl + "):", e.nativeEvent.error);
+                                                setImageError(true);
+                                            }}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.shareOverlay}
+                                            onPress={handleShare}
+                                        >
+                                            <Ionicons name="share-social" size={24} color="#FFD700" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <View style={styles.cardWrapper}>
+                                        <FighterCard
+                                            fighter={{
+                                                nombre: fighter.nombre,
+                                                apellidos: fighter.apellidos,
+                                                apodo: fighter.apodo,
+                                                peso: fighter.peso,
+                                                genero: fighter.genero,
+                                                photoUri: fighter.photoUri,
+                                                edad: fighter.edad !== undefined && fighter.edad !== null
+                                                    ? String(fighter.edad)
+                                                    : undefined,
+                                                altura: fighter.altura ? String(fighter.altura) : undefined,
+                                                clubName: fighter.clubName,
+                                                record: fighter.record
+                                            }}
+                                            variant="large"
+                                            backgroundUri={compositionAssets?.backgroundUri || undefined}
+                                            borderUri={compositionAssets?.borderUri || undefined}
+                                            fighterLayers={compositionAssets?.fighterLayers || []}
+                                            selectedStickers={compositionAssets?.selectedStickers || []}
+                                            stickerTransforms={compositionAssets?.stickerTransforms || {}}
+                                            companyLogoUri={compositionAssets?.companyLogoUri || companyLogoUri}
+                                            onShare={handleShare}
+                                        />
+                                    </View>
+                                )}
+                            </View>
+
+                            <View style={styles.infoContainer}>
+                                <MotivationalQuote style={styles.message} />
                             </View>
 
                             <View style={styles.actions}>
                                 <TouchableOpacity
                                     style={styles.primaryButton}
-                                    onPress={() => {
-                                        console.log('👆 Modal: Profile Button Touched');
-                                        if (onEdit) onEdit();
-                                    }}
+                                    onPress={onEdit}
                                 >
                                     <LinearGradient
                                         colors={['#FFD700', '#DAA520']}
@@ -121,12 +291,9 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
 
                                 <TouchableOpacity
                                     style={styles.secondaryButton}
-                                    onPress={() => {
-                                        console.log('👆 Modal: Close Button Touched');
-                                        if (onClose) onClose();
-                                    }}
+                                    onPress={onClose}
                                 >
-                                    <Text style={styles.secondaryButtonText}>CERRAR</Text>
+                                    <Text style={styles.secondaryButtonText}>VOLVER AL INICIO</Text>
                                 </TouchableOpacity>
                             </View>
 
@@ -141,14 +308,14 @@ export const FighterIdentityModal: React.FC<FighterIdentityModalProps> = ({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.9)',
+        backgroundColor: 'rgba(0,0,0,0.95)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: SPACING.lg,
+        padding: SPACING.md,
     },
     content: {
         width: '100%',
-        maxWidth: 550,
+        maxWidth: 420,
         borderRadius: BORDER_RADIUS.xl,
         overflow: 'hidden',
         ...SHADOWS.lg,
@@ -159,31 +326,82 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     gradient: {
-        padding: SPACING.xl,
+        paddingVertical: SPACING.xl,
+        paddingHorizontal: SPACING.lg,
         alignItems: 'center',
         gap: SPACING.lg,
+    },
+    headerIndicator: {
+        width: 40,
+        height: 4,
+        backgroundColor: 'rgba(255,215,0,0.3)',
+        borderRadius: 2,
+        marginBottom: -SPACING.md,
+    },
+    titleContainer: {
+        alignItems: 'center',
+        gap: SPACING.xs,
     },
     title: {
         fontSize: 24,
         fontWeight: '900',
         color: '#FFD700',
-        letterSpacing: 1,
+        letterSpacing: 1.5,
         textAlign: 'center',
-        ...createTextShadow('rgba(0,0,0,0.5)', 2, 2, 5),
+        ...createTextShadow('rgba(0,0,0,0.5)', 2, 2, 8),
     },
     subtitle: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.7)',
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.6)',
         textAlign: 'center',
-        marginTop: -SPACING.md,
+        fontWeight: '600',
     },
     cardContainer: {
         width: '100%',
-        // Removed scale to keep it original size
+        marginVertical: SPACING.sm,
+    },
+    cardWrapper: {
+        width: '100%',
+    },
+    bakedCardWrapper: {
+        width: '100%',
+        aspectRatio: 1.9,
+        backgroundColor: '#0a0a0a',
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.2)',
+        ...SHADOWS.md,
+    },
+    bakedImage: {
+        width: '100%',
+        height: '100%',
+    },
+    shareOverlay: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: 10,
+        borderRadius: BORDER_RADIUS.full,
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.3)',
+    },
+    infoContainer: {
+        width: '100%',
+        paddingHorizontal: SPACING.md,
+    },
+    message: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.5)',
+        textAlign: 'center',
+        fontStyle: 'italic',
+        lineHeight: 18,
     },
     actions: {
         width: '100%',
-        gap: SPACING.sm,
+        gap: SPACING.md,
+        marginTop: SPACING.sm,
     },
     buttonGradient: {
         flexDirection: 'row',
@@ -199,14 +417,14 @@ const styles = StyleSheet.create({
         ...SHADOWS.md,
     },
     primaryButtonText: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '900',
         letterSpacing: 1,
         color: '#000',
     },
     secondaryButton: {
         width: '100%',
-        paddingVertical: SPACING.md,
+        paddingVertical: SPACING.sm,
         alignItems: 'center',
     },
     secondaryButtonText: {
@@ -214,5 +432,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: COLORS.text.secondary,
         textDecorationLine: 'underline',
+        opacity: 0.8,
     },
 });

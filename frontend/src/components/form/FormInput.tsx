@@ -20,6 +20,7 @@ interface FormInputProps {
   successMessage?: string;
   maxLength?: number;
   onLayout?: (event: any) => void;
+  editable?: boolean;
 }
 
 export const FormInput: React.FC<FormInputProps> = ({
@@ -39,6 +40,7 @@ export const FormInput: React.FC<FormInputProps> = ({
   successMessage,
   maxLength,
   onLayout,
+  editable = true,
 }) => {
   return (
     <View style={styles.container} onLayout={onLayout}>
@@ -48,6 +50,7 @@ export const FormInput: React.FC<FormInputProps> = ({
         focused && styles.wrapperFocused,
         !!value && styles.wrapperFilled,
         !!error && styles.wrapperError,
+        !editable && styles.wrapperDisabled,
       ]}>
         <TextInput
           style={[
@@ -63,6 +66,7 @@ export const FormInput: React.FC<FormInputProps> = ({
           autoCapitalize={autoCapitalize}
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}
+          editable={editable}
           onFocus={onFocus}
           onBlur={onBlur}
           maxLength={maxLength}
@@ -125,6 +129,10 @@ const styles = StyleSheet.create({
   },
   wrapperError: {
     borderColor: COLORS.error,
+  },
+  wrapperDisabled: {
+    opacity: 0.6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   input: {
     flex: 1,

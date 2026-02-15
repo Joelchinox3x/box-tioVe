@@ -25,9 +25,9 @@ export const clubService = {
    */
   async getAll(): Promise<Club[]> {
     try {
-      console.log('Fetching clubs from API...');
+      // console.log('Fetching clubs from API...');
       const response = await api.get<ClubsResponse>('/clubs');
-      console.log('Clubs response:', response.data);
+      // console.log('Clubs response:', response.data);
       return response.data.clubs;
     } catch (error) {
       console.error('Error in clubService.getAll():', error);

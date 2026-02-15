@@ -7,8 +7,11 @@
 // Headers CORS
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// DEBUG ALL REQUESTS
+file_put_contents(__DIR__ . '/../files/debug_requests.txt', "[" . date('Y-m-d H:i:s') . "] " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
 // Manejar preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -59,6 +62,11 @@ try {
             break;
 
         // ========== PELEADORES ==========
+        case 'diagnostic':
+            require_once __DIR__ . '/../check_db.php';
+            exit; // check_db.php already prints output
+            break;
+            
         case 'peleadores':
             require_once __DIR__ . '/../controllers/PeleadoresController.php';
             $controller = new PeleadoresController($db);
@@ -68,6 +76,37 @@ try {
                 $filtro = $_GET['filtro'] ?? 'todos'; // todos, populares, club
                 $club = $_GET['club'] ?? null;
                 echo json_encode($controller->listar($filtro, $club));
+
+            } elseif ($method === 'GET' && $id === 'usuario' && $action) {
+                // GET /api/peleadores/usuario/{id} - Obtener por ID de Usuario
+                echo json_encode($controller->obtenerPorUsuarioId($action));
+
+            } elseif ($method === 'GET' && $id === 'manager-contacto' && !$action) {
+                // GET /api/peleadores/manager-contacto?rol=manager_cobros
+                $rol = $_GET['rol'] ?? 'manager_peleadores';
+                echo json_encode($controller->getManagerContacto($rol));
+
+            } elseif ($method === 'GET' && $id && $action === 'inscripcion-evento') {
+                // GET /api/peleadores/{id}/inscripcion-evento - Estado de inscripción al evento
+                echo json_encode($controller->getInscripcionEvento($id));
+
+            } elseif ($method === 'POST' && $id && $action === 'asignar-manager') {
+                // POST /api/peleadores/{id}/asignar-manager - Registrar asignacion de manager
+                echo json_encode($controller->registrarAsignacion($id));
+
+            } elseif ($method === 'POST' && $id && $action === 'crear-inscripcion') {
+                // POST /api/peleadores/{id}/crear-inscripcion - Crear inscripción al evento (sin pago)
+                echo json_encode($controller->crearInscripcion($id));
+
+            } elseif ($method === 'POST' && $id && $action === 'inscribir-evento') {
+                // POST /api/peleadores/{id}/inscribir-evento - Enviar pago de inscripción
+                $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+                if (!empty($_FILES) || strpos($contentType, 'multipart/form-data') !== false) {
+                    $data = $_POST;
+                } else {
+                    $data = json_decode(file_get_contents("php://input"), true);
+                }
+                echo json_encode($controller->inscribirEvento($id, $data));
 
             } elseif ($method === 'GET' && $id && $action === 'verificar-dni') {
                 // GET /api/peleadores/{dni}/verificar-dni - Verificar si DNI existe
@@ -107,6 +146,31 @@ try {
             } else {
                 http_response_code(404);
                 echo json_encode(["error" => "Endpoint no encontrado"]);
+            }
+            break;
+
+        // ========== FIGHTER CARDS (JSON + BAKED) ==========
+        case 'fighter-cards':
+            require_once __DIR__ . '/../controllers/FighterCardsController.php';
+            $controller = new FighterCardsController($db);
+
+            if ($method === 'POST') {
+                // POST /api/fighter-cards
+                $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+                if (!empty($_FILES) || strpos($contentType, 'multipart/form-data') !== false) {
+                    $data = $_POST;
+                } else {
+                    $data = json_decode(file_get_contents("php://input"), true);
+                }
+                echo json_encode($controller->guardar($data));
+
+            } elseif ($method === 'GET' && $id) {
+                // GET /api/fighter-cards/{peleador_id}
+                echo json_encode($controller->listarPorPeleador($id));
+
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint card no encontrado"]);
             }
             break;
 
@@ -220,6 +284,11 @@ try {
 
                 echo json_encode($controller->updateProfile($id, $data));
 
+            } elseif ($method === 'POST' && $id === 'update-password') {
+                // POST /api/usuarios/update-password - Actualizar contraseña
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->actualizarPassword($data));
+
             } elseif ($method === 'GET' && $id === 'verificar-email') {
                 // GET /api/usuarios/verificar-email?email=xxx
                 $email = $_GET['email'] ?? '';
@@ -261,19 +330,84 @@ try {
             }
             break;
 
+        // ========== CONFIGURACIÓN (APP) ==========
+        case 'settings':
+            require_once __DIR__ . '/../controllers/SettingsController.php';
+            $controller = new SettingsController($db);
+
+            if ($method === 'GET' && !$id) {
+                // GET /api/settings - Listar todos los settings
+                echo json_encode($controller->getAllSettings());
+
+            } elseif ($method === 'GET' && $id) {
+                // GET /api/settings/{key} - Obtener un setting
+                echo json_encode($controller->getSetting($id));
+
+            } elseif ($method === 'PUT' && $id) {
+                // PUT /api/settings/{key} - Actualizar un setting
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->updateSetting($id, $data));
+
+            } else {
+                http_response_code(400);
+                echo json_encode(["error" => "Falta la clave del setting"]);
+            }
+            break;
+
         // ========== SUBIDA TEMPORAL (APP -> WEB) ==========
         case 'temp-upload':
             require_once __DIR__ . '/../controllers/TempUploadController.php';
             $controller = new TempUploadController();
 
             if ($method === 'POST') {
-                // POST /api/temp-upload
-                // Detectar si files viene en $_FILES (multipart)
                 echo json_encode($controller->upload($_FILES));
             } else {
                 http_response_code(405);
                 echo json_encode(["error" => "Método no permitido"]);
             }
+            break;
+
+        // ========== HERRAMIENTA WEB (APP -> WEB) ==========
+        case 'bg-remover':
+            // Servir el HTML directamente
+            $htmlFile = __DIR__ . '/bg_remover.html';
+            if (file_exists($htmlFile)) {
+                header('Content-Type: text/html');
+                readfile($htmlFile);
+            } else {
+                http_response_code(404);
+                echo "Herramienta no encontrada en " . $htmlFile;
+            }
+            exit;
+            break;
+
+        // ========== SERVIR CONTENIDO (APP -> WEB) ==========
+        case 'temp-content':
+            // Recibir nombre de archivo por query
+            $fileName = $_GET['file'] ?? '';
+            $filePath = __DIR__ . '/uploads/temp/' . basename($fileName);
+            
+            if (!empty($fileName) && file_exists($filePath)) {
+                $ext = pathinfo($filePath, PATHINFO_EXTENSION);
+                $mimeTypes = [
+                    'png' => 'image/png',
+                    'jpg' => 'image/jpeg',
+                    'jpeg' => 'image/jpeg',
+                    'wasm' => 'application/wasm',
+                    'json' => 'application/json',
+                    'js' => 'application/javascript',
+                    'mjs' => 'application/javascript'
+                ];
+                $contentType = $mimeTypes[strtolower($ext)] ?? 'application/octet-stream';
+                
+                header('Content-Type: ' . $contentType);
+                header('Access-Control-Allow-Origin: *');
+                readfile($filePath);
+            } else {
+                http_response_code(404);
+                echo "Archivo no encontrado";
+            }
+            exit;
             break;
 
         // ========== BANNERS (DINÁMICO) ==========
@@ -345,10 +479,24 @@ try {
                 // GET /api/admin/peleadores-pendientes - Lista de peleadores pendientes
                 echo json_encode($controller->getPeleadoresPendientes());
 
+            } elseif ($method === 'GET' && $id === 'peleadores') {
+                // GET /api/admin/peleadores?filtro=todos|pendiente|aprobado|rechazado
+                $filtro = $_GET['filtro'] ?? 'todos';
+                echo json_encode($controller->getPeleadores($filtro));
+
             } elseif ($method === 'PUT' && $id === 'peleadores' && $action) {
                 // PUT /api/admin/peleadores/{id} - Aprobar/rechazar peleador
                 $data = json_decode(file_get_contents("php://input"), true);
                 echo json_encode($controller->cambiarEstadoPeleador($action, $data));
+
+            } elseif ($method === 'PATCH' && $id === 'peleadores' && $action) {
+                // PATCH /api/admin/peleadores/{id} - Editar datos del peleador
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->editPeleador($action, $data));
+
+            } elseif ($method === 'DELETE' && $id === 'peleadores' && $action) {
+                // DELETE /api/admin/peleadores/{id} - Eliminar peleador
+                echo json_encode($controller->deletePeleador($action));
 
             } elseif ($method === 'GET' && $id === 'clubs') {
                 // GET /api/admin/clubs - Todos los clubs
@@ -398,6 +546,28 @@ try {
                 $data = json_decode(file_get_contents("php://input"), true);
                 $evento_id = isset($_GET['evento_id']) ? $_GET['evento_id'] : null;
                 echo json_encode($controller->actualizarPrecioEvento($evento_id, $data));
+
+            } elseif ($method === 'GET' && $id === 'metodos-pago') {
+                // GET /api/admin/metodos-pago?activo=1
+                $filters = [];
+                if (isset($_GET['activo'])) {
+                    $filters['activo'] = $_GET['activo'];
+                }
+                echo json_encode($controller->getMetodosPago($filters));
+
+            } elseif ($method === 'POST' && $id === 'metodos-pago' && $action === 'upload-qr') {
+                // POST /api/admin/metodos-pago/upload-qr
+                echo json_encode($controller->uploadQRImage($_FILES));
+
+            } elseif ($method === 'POST' && $id === 'metodos-pago' && !$action) {
+                // POST /api/admin/metodos-pago
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->crearMetodoPago($data));
+
+            } elseif ($method === 'PUT' && $id === 'metodos-pago' && $action) {
+                // PUT /api/admin/metodos-pago/{id}
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->actualizarMetodoPago($action, $data));
 
             } else {
                 http_response_code(404);
@@ -527,6 +697,61 @@ try {
                 exit;
             } else {
                 echo "Archivo proof.html no encontrado en " . $file;
+            }
+            break;
+
+        // ========== ANUNCIOS ==========
+        case 'anuncios':
+            require_once __DIR__ . '/../controllers/AnunciosController.php';
+            $controller = new AnunciosController($db);
+
+            if ($method === 'GET' && !$id) {
+                // GET /api/anuncios - Listar (publico=1 para activos, sin param para admin)
+                $onlyActive = isset($_GET['publico']);
+                $eventoId = $_GET['evento_id'] ?? null;
+                $limit = $_GET['limit'] ?? null;
+                echo json_encode($controller->listar($onlyActive, $eventoId, $limit));
+
+            } elseif ($method === 'GET' && $id) {
+                // GET /api/anuncios/{id}
+                echo json_encode($controller->obtenerPorId($id));
+
+            } elseif ($method === 'POST' && !$id) {
+                // POST /api/anuncios - Crear anuncio
+                $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+                if (!empty($_FILES) || strpos($contentType, 'multipart/form-data') !== false) {
+                    $data = $_POST;
+                } else {
+                    $data = json_decode(file_get_contents("php://input"), true);
+                }
+                echo json_encode($controller->crear($data, $_FILES));
+
+            } elseif ($method === 'PUT' && $id) {
+                // PUT /api/anuncios/{id} - Actualizar
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->actualizar($id, $data));
+
+            } elseif ($method === 'DELETE' && $id) {
+                // DELETE /api/anuncios/{id}
+                echo json_encode($controller->eliminar($id));
+
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint anuncios no encontrado"]);
+            }
+            break;
+
+        // ========== TELEGRAM WEBHOOK ==========
+        case 'telegram-webhook':
+            require_once __DIR__ . '/../controllers/TelegramWebhookController.php';
+            $controller = new TelegramWebhookController($db);
+
+            if ($method === 'POST') {
+                $payload = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->handleWebhook($payload));
+            } else {
+                http_response_code(405);
+                echo json_encode(["error" => "Metodo no permitido"]);
             }
             break;
 

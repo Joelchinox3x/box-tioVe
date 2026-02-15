@@ -30,7 +30,7 @@ import { FormSection } from '../components/form/FormSection';
 import { FormInput } from '../components/form/FormInput';
 import { FormSelect } from '../components/form/FormSelect';
 import { PhoneInput } from '../components/form/PhoneInput';
-import { SponsorFooter } from '../components/form/SponsorFooter';
+
 import { EpicFighterSuccessModal } from '../components/EpicFighterSuccessModal';
 import { FighterIdentityModal } from '../components/FighterIdentityModal';
 import { FighterCard } from '../components/common/FighterCard';
@@ -40,8 +40,7 @@ import { clubService, Club } from '../services/clubService';
 import { bannerService } from '../services/bannerService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import { FighterImageUploadModal } from '../components/modals/FighterImageUploadModal';
-import { ImageAdjustmentControls } from '../components/form/ImageAdjustmentControls';
+
 import { generateDebugFighter } from '../data/dummyFighters';
 
 const SHOW_DEBUG_GENERATOR = true; // 🪄 MODO DEBUG: PONER EN FALSE PARA DESACTIVAR
