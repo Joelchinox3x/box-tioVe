@@ -436,6 +436,7 @@ class AdminController {
                 i.notas_admin,
                 -- Datos del peleador
                 u.nombre as peleador_nombre,
+                u.apellidos as peleador_apellidos,
                 u.email as peleador_email,
                 u.telefono as peleador_telefono,
                 p.apodo as peleador_apodo,
@@ -529,9 +530,22 @@ class AdminController {
 
             $this->db->commit();
 
+            $comprobantePdf = null;
+            try {
+                require_once __DIR__ . '/../services/PdfService.php';
+                $pdfService = new PdfService($this->db);
+                $inscripcionPdfData = $this->obtenerDatosInscripcionParaPdf((int)$inscripcion_id);
+                if ($inscripcionPdfData) {
+                    $comprobantePdf = $pdfService->generarComprobanteInscripcionPeleador($inscripcionPdfData);
+                }
+            } catch (Exception $e) {
+                error_log("Error generando comprobante PAGADO: " . $e->getMessage());
+            }
+
             return [
                 "success" => true,
-                "message" => "Pago confirmado exitosamente"
+                "message" => "Pago confirmado exitosamente",
+                "comprobante_pdf_url" => ($comprobantePdf && !empty($comprobantePdf['success'])) ? ($comprobantePdf['url'] ?? null) : null
             ];
 
         } catch (PDOException $e) {
@@ -1117,6 +1131,46 @@ class AdminController {
                 "success" => false,
                 "message" => "Error al eliminar peleador: " . $e->getMessage()
             ];
+        }
+    }
+
+    /**
+     * Obtener datos completos de inscripción para generar PDF.
+     */
+    private function obtenerDatosInscripcionParaPdf($inscripcionId) {
+        try {
+            $query = "SELECT
+                        ie.id,
+                        ie.peleador_id,
+                        ie.evento_id,
+                        ie.estado_pago,
+                        ie.monto_pagado,
+                        ie.fecha_pago,
+                        ie.metodo_pago,
+                        ie.fecha_inscripcion,
+                        p.documento_identidad as peleador_dni,
+                        p.apodo as peleador_apodo,
+                        u.nombre as peleador_nombre,
+                        u.apellidos as peleador_apellidos,
+                        u.telefono as peleador_telefono,
+                        e.nombre as evento_nombre,
+                        e.fecha as evento_fecha,
+                        e.hora as evento_hora,
+                        e.direccion as evento_direccion,
+                        e.precio_inscripcion_peleador
+                      FROM inscripciones_eventos ie
+                      INNER JOIN peleadores p ON ie.peleador_id = p.id
+                      INNER JOIN usuarios u ON p.usuario_id = u.id
+                      INNER JOIN eventos e ON ie.evento_id = e.id
+                      WHERE ie.id = :id
+                      LIMIT 1";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $inscripcionId, PDO::PARAM_INT);
+            $stmt->execute();
+            return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Exception $e) {
+            error_log("Error obtenerDatosInscripcionParaPdf(Admin): " . $e->getMessage());
+            return null;
         }
     }
 

@@ -123,6 +123,14 @@ export const fighterService = {
   },
 
   /**
+   * Regenerar manualmente el comprobante PDF de inscripción (para iteración de diseño).
+   */
+  async regenerarComprobante(peleadorId: number, payload?: { evento_id?: number; inscripcion_id?: number }) {
+    const response = await api.post(`/peleadores/${peleadorId}/regenerar-comprobante`, payload || {});
+    return response.data;
+  },
+
+  /**
    * Enviar pago de inscripción al evento
    */
   async inscribirEvento(

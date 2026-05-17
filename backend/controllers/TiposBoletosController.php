@@ -157,10 +157,12 @@ class TiposBoletosController {
      */
     public function desactivar($id) {
         try {
+            error_log("[TIPO_BOLETO] desactivar id=$id");
             $query = "UPDATE tipos_boleto SET activo = 0 WHERE id = :id";
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':id', $id);
             $stmt->execute();
+            error_log("[TIPO_BOLETO] desactivar rowCount=" . $stmt->rowCount());
 
             if ($stmt->rowCount() === 0) {
                 http_response_code(404);
@@ -191,10 +193,12 @@ class TiposBoletosController {
      */
     public function activar($id) {
         try {
+            error_log("[TIPO_BOLETO] activar id=$id");
             $query = "UPDATE tipos_boleto SET activo = 1 WHERE id = :id";
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':id', $id);
             $stmt->execute();
+            error_log("[TIPO_BOLETO] activar rowCount=" . $stmt->rowCount());
 
             if ($stmt->rowCount() === 0) {
                 http_response_code(404);

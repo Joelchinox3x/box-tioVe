@@ -14,18 +14,28 @@ interface CustomBottomNavProps {
 
 export const CustomBottomNav: React.FC<CustomBottomNavProps> = ({ navigation, state }) => {
   const insets = useSafeAreaInsets();
+  const [isCenterTicket, setIsCenterTicket] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Verificar estado de sesión cada vez que cambia la navegación o monta
+  // Verificar estado de sesión y tickets cada vez que cambia la navegación o monta
   useEffect(() => {
-    checkLoginStatus();
+    checkStatus();
   }, [state.index]);
 
-  const checkLoginStatus = async () => {
+  const checkStatus = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       // If token exists, we consider user logged in
-      setIsLoggedIn(!!token);
+      const logged = !!token;
+      setIsLoggedIn(logged);
+
+      if (!logged) {
+        // Check for anonymous tickets if not logged in
+        const anonTickets = await AsyncStorage.getItem('anonymous_tickets');
+        setIsCenterTicket(!!anonTickets);
+      } else {
+        setIsCenterTicket(false);
+      }
     } catch (error) {
       console.error('Error checking login status:', error);
     }
@@ -34,8 +44,10 @@ export const CustomBottomNav: React.FC<CustomBottomNavProps> = ({ navigation, st
   const routes = [
     { key: 'Home', name: 'Inicio', icon: 'home' },
     { key: 'Event', name: 'Evento', icon: 'calendar' },
-    { key: 'BuyTickets', name: '', icon: 'ticket', isCenter: true },
-    { key: 'Fighters', name: 'Peleadores', icon: 'trophy' },
+    isCenterTicket
+      ? { key: 'Profile', name: '', icon: 'ticket', isCenter: true } // Redirige a Profile (Guest Mode)
+      : { key: 'BuyTickets', name: '', icon: 'cart', isCenter: true },
+    { key: 'Fighters', name: 'Peleadores', icon: 'body' },
     // Dinámico: Si está logueado -> Perfil, si no -> Regístrate
     isLoggedIn
       ? { key: 'Profile', name: 'Mi Perfil', icon: 'person' }

@@ -24,6 +24,9 @@ yarn-error.log*
 
 # Project specific
 backend/files/
+backend/public/uploads/
+backend/public/tmp/
+backend/vendor/
 proformaserver/
 frontend/build/
 frontend/dist/

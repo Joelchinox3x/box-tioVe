@@ -99,6 +99,81 @@ const SETTINGS_CONFIG: SettingConfig[] = [
       },
     ],
   },
+  {
+    key: 'pdf_template_fighter_inscripcion',
+    title: 'Template PDF Peleadores',
+    description: 'Template del ticket PDF que se genera al registrar un peleador',
+    icon: 'document-text',
+    iconColor: '#e74c3c',
+    options: [
+      {
+        value: 'fighter_ticket_tpl_01',
+        label: 'Template 01',
+        description: 'Diseño principal de ticket',
+        icon: 'color-palette',
+      },
+      {
+        value: 'fighter_ticket_tpl_02',
+        label: 'Template 02',
+        description: 'Diseño alternativo verde',
+        icon: 'color-palette-outline',
+      },
+      {
+        value: 'fighter_ticket_tpl_03',
+        label: 'Template 03',
+        description: 'Diseño alternativo azul',
+        icon: 'layers',
+      },
+      {
+        value: 'fighter_ticket_tpl_04',
+        label: 'Template 04',
+        description: 'Diseño alternativo rojo',
+        icon: 'grid',
+      },
+    ],
+  },
+  {
+    key: 'pdf_template_fighter_inscripcion_comprobante',
+    title: 'Template PDF Comprobante',
+    description: 'Template del comprobante unificado de inscripción (inscrito/pendiente/pagado)',
+    icon: 'document-attach',
+    iconColor: '#2ecc71',
+    options: [
+      {
+        value: 'fighter_comprobante_tpl_01',
+        label: 'Comprobante 01',
+        description: 'Diseño principal para comprobante de inscripción',
+        icon: 'receipt',
+      },
+      {
+        value: 'fighter_comprobante_tpl_02',
+        label: 'Comprobante 02',
+        description: 'Diseño alternativo para comprobante de inscripción',
+        icon: 'receipt-outline',
+      },
+    ],
+  },
+  {
+    key: 'qr_scan_public_view',
+    title: 'Vista QR Pública',
+    description: 'Controla qué ve una persona al escanear el QR del comprobante con su cámara',
+    icon: 'qr-code',
+    iconColor: '#6c5ce7',
+    options: [
+      {
+        value: 'ocultar_staff',
+        label: 'Ocultar Staff',
+        description: 'Muestra solo un mensaje de "Comprobante Válido" sin formulario de login',
+        icon: 'eye-off',
+      },
+      {
+        value: 'mostrar_staff',
+        label: 'Mostrar Login Staff',
+        description: 'Muestra el formulario de login para que el staff verifique datos del pago',
+        icon: 'eye',
+      },
+    ],
+  },
 ];
 
 export default function AdminSettingsScreen() {

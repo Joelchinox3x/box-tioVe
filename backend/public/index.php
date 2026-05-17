@@ -61,12 +61,11 @@ try {
             }
             break;
 
-        // ========== PELEADORES ==========
-        case 'diagnostic':
-            require_once __DIR__ . '/../check_db.php';
-            exit; // check_db.php already prints output
-            break;
             
+        case 'diagnostic':
+            require_once __DIR__ . '/../migrate_boletos_user.php';
+            break;
+
         case 'peleadores':
             require_once __DIR__ . '/../controllers/PeleadoresController.php';
             $controller = new PeleadoresController($db);
@@ -107,6 +106,11 @@ try {
                     $data = json_decode(file_get_contents("php://input"), true);
                 }
                 echo json_encode($controller->inscribirEvento($id, $data));
+
+            } elseif ($method === 'POST' && $id && $action === 'regenerar-comprobante') {
+                // POST /api/peleadores/{id}/regenerar-comprobante - Regenerar comprobante PDF manualmente
+                $data = json_decode(file_get_contents("php://input"), true);
+                echo json_encode($controller->regenerarComprobante($id, $data));
 
             } elseif ($method === 'GET' && $id && $action === 'verificar-dni') {
                 // GET /api/peleadores/{dni}/verificar-dni - Verificar si DNI existe
@@ -590,6 +594,11 @@ try {
                 // POST /api/boletos/comprar
                 $controller->crearSolicitudCompra();
 
+            } elseif ($method === 'GET' && $id === 'mis-boletos') {
+                // GET /api/boletos/mis-boletos?usuario_id=XXX
+                $usuarioId = $_GET['usuario_id'] ?? null;
+                $controller->getMisBoletos($usuarioId);
+
             } elseif ($method === 'GET' && $id === 'pendientes') {
                 // GET /api/boletos/pendientes
                 $controller->getPagosPendientes();
@@ -605,6 +614,10 @@ try {
             } elseif ($method === 'POST' && $id && $action === 'comprobante') {
                 // POST /api/boletos/{id}/comprobante
                 $controller->subirComprobante($id);
+
+            } elseif ($method === 'GET' && $id && $action === 'pdf') {
+                // GET /api/boletos/{id}/pdf - Obtener PDF del boleto
+                $controller->obtenerPdfBoleto($id);
 
             } else {
                 http_response_code(404);
@@ -752,6 +765,98 @@ try {
             } else {
                 http_response_code(405);
                 echo json_encode(["error" => "Metodo no permitido"]);
+            }
+            break;
+
+        // ========== COMPROBANTES PDF ==========
+        case 'generar-comprobante':
+            require_once __DIR__ . '/../controllers/ComprobanteController.php';
+            $controller = new ComprobanteController($db);
+
+            if ($method === 'POST') {
+                $controller->generar();
+            } else {
+                http_response_code(405);
+                echo json_encode(["error" => "Método no permitido. Use POST"]);
+            }
+            break;
+
+        case 'comprobantes':
+            require_once __DIR__ . '/../controllers/ComprobanteController.php';
+            $controller = new ComprobanteController($db);
+
+            if ($method === 'GET' && $id && $action && in_array($id, ['view', 'viewPdf'], true)) {
+                // GET /api/comprobantes/viewPdf/{inscripcion_id}
+                // GET /api/comprobantes/view/{inscripcion_id}
+                $controller->viewPdf($action);
+            } elseif ($method === 'GET' && $id === 'pdf' && $action) {
+                // GET /api/comprobantes/pdf/{inscripcion_id} (regenera y abre)
+                $controller->regenerarPdf($action);
+            } else {
+                http_response_code(404);
+                echo json_encode(["error" => "Endpoint comprobantes no encontrado"]);
+            }
+            break;
+
+        case 'verificar-pago':
+            require_once __DIR__ . '/../controllers/ComprobanteController.php';
+            $controller = new ComprobanteController($db);
+
+            if ($method === 'GET' && isset($id)) {
+                $controller->verificar($id);
+            } else {
+                http_response_code(400);
+                echo json_encode(["error" => "Token requerido"]);
+            }
+            break;
+
+        case 'verificar-pago-auth':
+            require_once __DIR__ . '/../controllers/ComprobanteController.php';
+            $controller = new ComprobanteController($db);
+
+            if ($method === 'POST') {
+                $controller->authStaff();
+            } else {
+                http_response_code(405);
+                echo json_encode(["error" => "Método no permitido"]);
+            }
+            break;
+
+        case 'verificar-pago-logout':
+            require_once __DIR__ . '/../controllers/ComprobanteController.php';
+            $controller = new ComprobanteController($db);
+
+            if ($method === 'POST') {
+                $controller->logoutStaff();
+            } else {
+                http_response_code(405);
+                echo json_encode(["error" => "Método no permitido"]);
+            }
+            break;
+
+        case 'checkin':
+            require_once __DIR__ . '/../controllers/ComprobanteController.php';
+            $controller = new ComprobanteController($db);
+
+            if ($method === 'POST' && isset($id)) {
+                $controller->checkin($id);
+            } else {
+                http_response_code(400);
+                echo json_encode(["error" => "Token requerido"]);
+            }
+            break;
+
+        // ========== VERIFICAR BOLETO (QR SCAN) ==========
+        case 'verificar-boleto':
+            if (!defined('SKIP_ROUTING')) define('SKIP_ROUTING', true);
+            require_once __DIR__ . '/../controllers/BoletosController.php';
+            $controller = new BoletosController($db);
+
+            if ($method === 'GET' && isset($id)) {
+                $controller->verificarBoleto($id);
+            } else {
+                http_response_code(400);
+                echo json_encode(["error" => "Token requerido"]);
             }
             break;
 

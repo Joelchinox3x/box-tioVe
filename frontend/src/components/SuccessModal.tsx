@@ -17,6 +17,8 @@ interface SuccessModalProps {
   message: string;
   buttonText?: string;
   onClose: () => void;
+  secondaryButtonText?: string;
+  onSecondaryClose?: () => void;
 }
 
 export const SuccessModal: React.FC<SuccessModalProps> = ({
@@ -25,6 +27,8 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
   message,
   buttonText = 'Aceptar',
   onClose,
+  secondaryButtonText,
+  onSecondaryClose,
 }) => {
   return (
     <Modal
@@ -35,21 +39,22 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
     >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
-          {/* Icono de éxito */}
           <View style={styles.iconContainer}>
             <Ionicons name="checkmark-circle" size={80} color={COLORS.success} />
           </View>
 
-          {/* Título */}
           <Text style={styles.title}>{title}</Text>
-
-          {/* Mensaje */}
           <Text style={styles.message}>{message}</Text>
 
-          {/* Botón */}
           <TouchableOpacity style={styles.button} onPress={onClose}>
             <Text style={styles.buttonText}>{buttonText}</Text>
           </TouchableOpacity>
+
+          {secondaryButtonText && onSecondaryClose && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={onSecondaryClose}>
+              <Text style={styles.secondaryButtonText}>{secondaryButtonText}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -69,7 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.xl,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 400,
     alignItems: 'center',
     ...createShadow('#000', 0, 4, 0.3, 8, 8),
   },
@@ -87,21 +92,30 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.md,
     color: COLORS.text.secondary,
     textAlign: 'center',
-    lineHeight: 24,
     marginBottom: SPACING.xl,
+    lineHeight: 24,
   },
   button: {
     backgroundColor: COLORS.primary,
     paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xxl,
     borderRadius: BORDER_RADIUS.md,
     width: '100%',
     alignItems: 'center',
+    marginBottom: SPACING.sm,
   },
   buttonText: {
     fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.inverse,
-    letterSpacing: 0.5,
+  },
+  secondaryButton: {
+    paddingVertical: SPACING.md,
+    width: '100%',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
   },
 });

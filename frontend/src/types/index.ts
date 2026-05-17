@@ -136,16 +136,21 @@ export interface BoletoVendido {
   fecha_validacion?: string;
   fecha_uso?: string;
   observaciones?: string;
-  // Datos adicionales del JOIN
-  tipo_boleto_nombre?: string;
+  // Datos adicionales del JOIN y formateo
+  tipo_boleto?: string;        // tb.nombre
+  evento?: string;             // e.nombre
   color_hex?: string;
-  evento_nombre?: string;
   evento_fecha?: string;
   evento_hora?: string;
-  evento_direccion?: string;
+
+  // Propiedades generadas en el backend (loop)
+  pdf_url?: string;
+  fecha_fmt?: string;
+  hora_fmt?: string;
 }
 
 export interface ComprarBoletoRequest {
+  evento_id: number;
   tipo_boleto_id: number;
   comprador_nombres_apellidos: string;
   comprador_telefono: string;

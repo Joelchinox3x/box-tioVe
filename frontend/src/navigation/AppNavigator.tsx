@@ -13,10 +13,12 @@ import ProfileScreen from '../screens/ProfileScreen';
 import FighterFormScreen from '../screens/FighterForm';
 import RegisterUserScreen from '../screens/RegisterUserScreen';
 import LoginScreen from '../screens/LoginScreen';
-import BuyTicketsScreen from '../screens/BuyTicketsScreenNEW';
+import BuyTicketsScreen from '../screens/BuyTicketsScreen';
 import AdminBoletosScreen from '../screens/admin/AdminBoletosScreen';
 import AnunciosScreen from '../screens/AnunciosScreen';
+import StaffQRScannerScreen from '../screens/StaffQRScannerScreen';
 import { AdminPanel } from '../screens/admin';
+import PurchaseSuccessScreen from '../screens/PurchaseSuccessScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -76,6 +78,16 @@ export default function AppNavigator() {
         <Tab.Screen
           name="AdminBoletos"
           component={AdminBoletosScreen}
+          options={{ tabBarButton: () => null }}
+        />
+        <Tab.Screen
+          name="StaffQRScanner"
+          component={StaffQRScannerScreen}
+          options={{ tabBarButton: () => null }}
+        />
+        <Tab.Screen
+          name="PurchaseSuccess"
+          component={PurchaseSuccessScreen}
           options={{ tabBarButton: () => null }}
         />
       </Tab.Navigator>

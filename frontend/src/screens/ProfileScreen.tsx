@@ -25,6 +25,8 @@ import { createShadow } from '../utils/shadows';
 import { ScreenHeader } from '../components/common/ScreenHeader';
 import { clubService, Club } from '../services/clubService';
 import { fighterService } from '../services/fighterService';
+import boletosService from '../services/boletosService';
+import { BoletoVendido } from '../types';
 import api from '../services/api';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ChangePasswordModal } from '../components/common/ChangePasswordModal';
@@ -86,6 +88,7 @@ export default function ProfileScreen() {
   // Estado de inscripción al evento
   const [eventoData, setEventoData] = useState<any>(null);
   const [inscripcionData, setInscripcionData] = useState<any>(null);
+  const [ticketPdfUrl, setTicketPdfUrl] = useState<string | null>(null);
   const [estadoPeleador, setEstadoPeleador] = useState<string>('pendiente');
   const [loadingInscripcion, setLoadingInscripcion] = useState(false);
   const [inscribiendose, setInscribiendose] = useState(false);
@@ -95,11 +98,78 @@ export default function ProfileScreen() {
   const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState<string>('');
   const [comprobante, setComprobante] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [metodosPagoDisponibles, setMetodosPagoDisponibles] = useState<MetodoPagoInfo[]>([]);
+  const [boletos, setBoletos] = useState<BoletoVendido[]>([]);
+  const [anonymousTickets, setAnonymousTickets] = useState<any[]>([]);
+  const [loadingBoletos, setLoadingBoletos] = useState(false);
 
   const getImageUrl = (path: string | null | undefined): string | null => {
     if (!path) return null;
     if (path.startsWith('http')) return path;
     return `${Config.BASE_URL}/${path}`;
+  };
+
+  const abrirDocumentoPdf = async (url?: string | null, mensajeNoDisponible = 'Documento no disponible') => {
+    if (!url) {
+      setMessageModal({ visible: true, type: 'error', message: mensajeNoDisponible });
+      return;
+    }
+    try {
+      setLoadingExtra(true);
+      const separator = url.includes('?') ? '&' : '?';
+      const cacheBustedUrl = `${url}${separator}_ts=${Date.now()}`;
+      await Linking.openURL(cacheBustedUrl);
+    } catch (error) {
+      setMessageModal({ visible: true, type: 'error', message: 'No se pudo abrir el PDF' });
+    } finally {
+      setLoadingExtra(false);
+    }
+  };
+
+  const renderTicketPdfButton = () => {
+    if (!ticketPdfUrl) return null;
+    return (
+      <TouchableOpacity
+        style={[styles.whatsappButton, { marginTop: SPACING.sm, backgroundColor: '#2563eb' }]}
+        onPress={() => abrirDocumentoPdf(ticketPdfUrl, 'Aún no se generó el ticket de inscripción')}
+        disabled={loadingExtra}
+      >
+        {loadingExtra ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <Ionicons name="ticket-outline" size={20} color="#fff" />
+            <Text style={styles.whatsappButtonText}>
+              Descargar Ticket de Inscripción
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderComprobantePdfButton = () => {
+    const comprobanteUrl = inscripcionData?.comprobante_pdf_url;
+    if (!comprobanteUrl) return null;
+
+    const estado = (inscripcionData?.estado_pago || 'inscrito').toUpperCase();
+    return (
+      <TouchableOpacity
+        style={[styles.whatsappButton, { marginTop: SPACING.sm, backgroundColor: '#0ea5e9' }]}
+        onPress={() => abrirDocumentoPdf(comprobanteUrl, 'Aún no se generó el comprobante')}
+        disabled={loadingExtra}
+      >
+        {loadingExtra ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <Ionicons name="document-text" size={20} color="#fff" />
+            <Text style={styles.whatsappButtonText}>
+              Descargar Comprobante ({estado})
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    );
   };
 
   const requiresComprobante = (metodo: string) => {
@@ -115,6 +185,18 @@ export default function ProfileScreen() {
       }
     } catch (error) {
       console.log('Error cargando métodos de pago:', error);
+    }
+  };
+
+  const loadMisBoletos = async (userId: number) => {
+    try {
+      setLoadingBoletos(true);
+      const misBoletos = await boletosService.getMisBoletos(userId);
+      setBoletos(misBoletos);
+    } catch (error) {
+      console.error('Error cargando mis boletos:', error);
+    } finally {
+      setLoadingBoletos(false);
     }
   };
 
@@ -171,6 +253,13 @@ export default function ProfileScreen() {
         if (parsedUser.tipo_id === 2 && parsedUser.peleador?.id) {
           loadInscripcionEvento(parsedUser.peleador.id);
         }
+
+      } else {
+        // Si no hay usuario, buscar tickets anónimos
+        const anonTickets = await AsyncStorage.getItem('anonymous_tickets');
+        if (anonTickets) {
+          setAnonymousTickets(JSON.parse(anonTickets));
+        }
       }
     } catch (error) {
       console.error('Error cargando datos del usuario:', error);
@@ -199,6 +288,9 @@ export default function ProfileScreen() {
         if (freshUser.tipo_id === 2 && freshUser.peleador?.id) {
           loadInscripcionEvento(freshUser.peleador.id);
         }
+
+        // Cargar boletos
+        loadMisBoletos(freshUser.id);
 
         // 🛡️ SECURITY PROMPT: Check if first login
         if (freshUser.es_primer_login === 1) {
@@ -239,6 +331,7 @@ export default function ProfileScreen() {
         setEstadoPeleador(result.estado_peleador || 'pendiente');
         setEventoData(result.evento);
         setInscripcionData(result.inscripcion);
+        setTicketPdfUrl(result.ticket_pdf_url || null);
 
         if (result.evento && !result.inscripcion) {
           // Hay evento pero no se ha inscrito → mostrar boton + manager
@@ -288,15 +381,18 @@ export default function ProfileScreen() {
       return;
     }
     if (!user?.peleador?.id || !eventoData?.id) return;
+    const peleadorId = user.peleador.id;
+    const eventoId = eventoData.id;
 
     try {
       setInscribiendose(true);
       const result = await fighterService.inscribirEvento(
-        user.peleador.id,
-        eventoData.id,
+        peleadorId,
+        eventoId,
         metodoPagoSeleccionado,
         comprobante || undefined
       );
+      console.log('DEBUG_TRACE inscribirEvento:', result?.debug_trace_id, result);
 
       // Mostrar modal de éxito
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -308,7 +404,7 @@ export default function ProfileScreen() {
 
       // Esperar un momento antes de recargar para que el usuario vea el modal
       setTimeout(() => {
-        loadInscripcionEvento(user.peleador.id);
+        loadInscripcionEvento(peleadorId);
         setComprobante(null);
         setMetodoPagoSeleccionado('');
       }, 500);
@@ -323,9 +419,12 @@ export default function ProfileScreen() {
 
   const handleCrearInscripcion = async () => {
     if (!user?.peleador?.id || !eventoData?.id) return;
+    const peleadorId = user.peleador.id;
+    const eventoId = eventoData.id;
     try {
       setInscribiendose(true);
-      const result = await fighterService.crearInscripcion(user.peleador.id, eventoData.id);
+      const result = await fighterService.crearInscripcion(peleadorId, eventoId);
+      console.log('DEBUG_TRACE crearInscripcion:', result?.debug_trace_id, result);
 
       // Mostrar modal de confirmación
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -337,7 +436,7 @@ export default function ProfileScreen() {
 
       // Recargar para mostrar la pantalla de pago
       setTimeout(() => {
-        loadInscripcionEvento(user.peleador.id);
+        loadInscripcionEvento(peleadorId);
       }, 500);
 
     } catch (error: any) {
@@ -347,6 +446,7 @@ export default function ProfileScreen() {
       setInscribiendose(false);
     }
   };
+
 
   const comprobanteRequired = metodoPagoSeleccionado ? requiresComprobante(metodoPagoSeleccionado) : false;
 
@@ -367,6 +467,17 @@ export default function ProfileScreen() {
       await AsyncStorage.removeItem('user');
       await AsyncStorage.removeItem('token');
       setUser(null);
+      setClub(null);
+      setInscripcionData(null);
+      setEventoData(null);
+      setTicketPdfUrl(null);
+      setEstadoPeleador('pendiente');
+      setMetodoPagoSeleccionado('');
+      setComprobante(null);
+      setMetodosPagoDisponibles([]);
+      setManagerContacto(null);
+      setManagerCobros(null);
+      setManagerGeneral(null);
       setLogoutModalVisible(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -383,6 +494,79 @@ export default function ProfileScreen() {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Cargando perfil...</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Si no hay usuario pero hay tickets locales (Modo Invitado)
+  if (!user && anonymousTickets.length > 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <ScreenHeader
+          title="MIS ENTRADAS"
+          showBackButton={true}
+          onBackPress={() => navigation.navigate('Home' as never)}
+        />
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={[styles.section, { marginTop: 20 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15, gap: 10 }}>
+              <Ionicons name="phone-portrait-outline" size={24} color={COLORS.primary} />
+              <View>
+                <Text style={styles.sectionTitle}>TICKETS EN DISPOSITIVO</Text>
+                <Text style={{ color: COLORS.text.secondary, fontSize: 12 }}>
+                  Guardados localmente en este teléfono.
+                </Text>
+              </View>
+            </View>
+
+            {anonymousTickets.map((ticket, index) => (
+              <View key={index} style={[styles.enrollmentCard, { marginBottom: 15, borderColor: COLORS.primary + '30' }]}>
+                <View style={styles.enrollmentHeader}>
+                  <Text style={styles.enrollmentTitle}>{ticket.tipo_boleto}</Text>
+                  <View style={[styles.statusChip, { backgroundColor: COLORS.success }]}>
+                    <Text style={styles.statusChipText}>PAGO EXITOSO</Text>
+                  </View>
+                </View>
+
+                <View style={{ paddingVertical: 10 }}>
+                  <Text style={{ color: '#fff', fontSize: 16 }}>{ticket.comprador}</Text>
+                  <Text style={{ color: '#888', fontSize: 12 }}>ID: #{ticket.id?.toString().padStart(6, '0')}</Text>
+                  <Text style={{ color: '#888', fontSize: 12 }}>
+                    Fecha: {new Date(ticket.fecha_compra).toLocaleDateString()}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.whatsappButton, { backgroundColor: COLORS.primary, marginTop: 10 }]}
+                  onPress={() => abrirDocumentoPdf(ticket.pdf_url)}
+                >
+                  <Ionicons name="download-outline" size={20} color="#000" />
+                  <Text style={[styles.whatsappButtonText, { color: '#000' }]}>DESCARGAR PDF</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: 20 }]}
+              onPress={() => navigation.navigate('BuyTickets' as never)}
+            >
+              <Ionicons name="cart" size={24} color={COLORS.text.inverse} />
+              <Text style={styles.primaryButtonText}>SEGUIR COMPRANDO</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { marginTop: 15 }]}
+              onPress={() => navigation.navigate('Login' as never)}
+            >
+              <Ionicons name="log-in-outline" size={24} color={COLORS.primary} />
+              <Text style={styles.secondaryButtonText}>INICIAR SESIÓN / CREAR CUENTA</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginTop: 20 }}>
+              * Si borras los datos de la app, perderás estos tickets locales. Recomendamos crear una cuenta.
+            </Text>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -523,6 +707,71 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Sección: Mis Entradas (Boletos comprados) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🎫 MIS ENTRADAS</Text>
+
+          {loadingBoletos ? (
+            <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 10 }} />
+          ) : boletos.length > 0 ? (
+            boletos.map((boleto) => (
+              <View key={boleto.id} style={styles.ticketCard}>
+                <View style={[styles.ticketHeader, { backgroundColor: boleto.color_hex || COLORS.primary }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.ticketEventName}>{boleto.evento}</Text>
+                    <Text style={styles.ticketDate}>{boleto.fecha_fmt} - {boleto.hora_fmt}</Text>
+                  </View>
+                  <Ionicons name="ticket" size={24} color="#fff" />
+                </View>
+
+                <View style={styles.ticketBody}>
+                  <View style={styles.ticketRow}>
+                    <Text style={styles.ticketLabel}>Tipo:</Text>
+                    <Text style={styles.ticketValue}>{boleto.tipo_boleto} (x{boleto.cantidad})</Text>
+                  </View>
+                  <View style={styles.ticketRow}>
+                    <Text style={styles.ticketLabel}>Total:</Text>
+                    <Text style={styles.ticketValue}>S/ {Number(boleto.precio_total).toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.ticketRow}>
+                    <Text style={styles.ticketLabel}>Estado:</Text>
+                    <View style={[
+                      styles.statusBadge,
+                      { backgroundColor: boleto.estado_pago === 'verificado' ? COLORS.success : COLORS.warning }
+                    ]}>
+                      <Text style={styles.statusText}>
+                        {boleto.estado_pago === 'verificado' ? 'PAGADO' : boleto.estado_pago.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {(boleto.estado_pago === 'verificado') && (
+                    <TouchableOpacity
+                      style={styles.downloadTicketBtn}
+                      onPress={() => abrirDocumentoPdf(boleto.pdf_url, 'Generando boleto...')}
+                    >
+                      <Ionicons name="download-outline" size={20} color="#fff" />
+                      <Text style={styles.downloadTicketText}>Descargar Entradas (PDF)</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {boleto.estado_pago === 'pendiente' && (
+                    <View style={styles.pendingInfo}>
+                      <Ionicons name="time-outline" size={16} color={COLORS.warning} />
+                      <Text style={styles.pendingText}>Tu pago está siendo verificado.</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyTickets}>
+              <Ionicons name="ticket-outline" size={48} color={COLORS.text.tertiary} />
+              <Text style={styles.emptyTicketsText}>No tienes entradas compradas aún.</Text>
+            </View>
+          )}
+        </View>
+
         {/* Si es peleador, mostrar estadísticas */}
         {user.tipo_id === 2 && user.peleador && (
           <View style={styles.section}>
@@ -619,6 +868,9 @@ export default function ProfileScreen() {
                     Tu perfil fue rechazado. Contacta al administrador para más información.
                   </Text>
                 </View>
+
+                {renderTicketPdfButton()}
+
                 {managerContacto && (
                   <TouchableOpacity
                     style={styles.whatsappButton}
@@ -665,6 +917,8 @@ export default function ProfileScreen() {
                   <Text style={styles.precioLabel}>Precio de inscripción:</Text>
                   <Text style={styles.precioValue}>S/ {Number(eventoData.precio_inscripcion_peleador || 0).toFixed(2)}</Text>
                 </View>
+
+                {renderTicketPdfButton()}
 
                 <TouchableOpacity
                   style={styles.inscribirseBtn}
@@ -730,6 +984,8 @@ export default function ProfileScreen() {
                   <Text style={styles.precioLabel}>Precio de inscripción:</Text>
                   <Text style={styles.precioValue}>S/ {Number(eventoData.precio_inscripcion_peleador || 0).toFixed(2)}</Text>
                 </View>
+
+                {renderComprobantePdfButton()}
 
                 {/* Selector de método de pago con datos reales de BD */}
                 <Text style={styles.metodoPagoLabel}>Selecciona método de pago:</Text>
@@ -913,6 +1169,8 @@ export default function ProfileScreen() {
                   Inscrito el {new Date(inscripcionData.fecha_inscripcion).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </Text>
 
+                {renderComprobantePdfButton()}
+
                 {managerGeneral && (
                   <TouchableOpacity
                     style={[styles.whatsappButton, { marginTop: SPACING.sm }]}
@@ -963,6 +1221,8 @@ export default function ProfileScreen() {
                   </Text>
                 )}
 
+                {renderComprobantePdfButton()}
+
                 {managerGeneral && (
                   <TouchableOpacity
                     style={[styles.whatsappButton, { marginTop: SPACING.sm }]}
@@ -982,6 +1242,7 @@ export default function ProfileScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
+
               </View>
             )}
           </View>
@@ -1028,6 +1289,20 @@ export default function ProfileScreen() {
           <Ionicons name="create-outline" size={24} color={COLORS.primary} />
           <Text style={styles.editProfileButtonText}>EDITAR MI INFORMACIÓN</Text>
         </TouchableOpacity>
+
+        {/* Botón Scanner QR (solo para staff y admin) */}
+        {(user.tipo_id === 1 || user.tipo_id === 5) && (
+          <TouchableOpacity
+            style={styles.staffButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              navigation.navigate('StaffQRScanner' as never);
+            }}
+          >
+            <Ionicons name="qr-code" size={24} color="#000" />
+            <Text style={styles.staffButtonText}>VERIFICAR QR DE PAGO</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Botón de Panel Admin (solo para administradores) */}
         {user.tipo_id === 1 && (
@@ -1701,6 +1976,25 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.primary,
   },
+  staffButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: BORDER_RADIUS.md,
+    gap: SPACING.sm,
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.xl,
+    ...createShadow(COLORS.primary, 0, 4, 0.3, 8, 8),
+  },
+  staffButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: '#000',
+    letterSpacing: 0.5,
+  },
   adminButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1791,5 +2085,111 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: '700',
     color: '#fff',
+  },
+
+  // Ticket Styles
+  ticketCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  ticketHeader: {
+    padding: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ticketEventName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  ticketDate: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  ticketBody: {
+    padding: SPACING.md,
+  },
+  ticketRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    alignItems: 'center',
+  },
+  ticketLabel: {
+    color: COLORS.text.secondary,
+    fontSize: 14,
+  },
+  ticketValue: {
+    color: COLORS.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  downloadTicketBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.md,
+    gap: 8,
+  },
+  downloadTicketText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  pendingInfo: {
+    marginTop: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: SPACING.sm,
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  pendingText: {
+    color: COLORS.warning,
+    fontSize: 12,
+  },
+  emptyTickets: {
+    padding: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: COLORS.text.tertiary,
+  },
+  emptyTicketsText: {
+    marginTop: SPACING.md,
+    color: COLORS.text.secondary,
+    fontSize: 16,
   },
 });

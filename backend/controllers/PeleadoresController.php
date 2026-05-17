@@ -407,11 +407,37 @@
 
             $this->db->commit();
 
+            $ticketPdf = null;
+            try {
+                require_once __DIR__ . '/../services/PdfService.php';
+                $pdfService = new PdfService($this->db);
+                $eventoTicket = $this->obtenerEventoParaTicket();
+
+                $ticketPdf = $pdfService->generarTicketInscripcionPeleador([
+                    'peleador_id' => (int)$peleador_id,
+                    'usuario_id' => (int)$usuario_id,
+                    'nombre' => trim(($data['nombre'] ?? '') . ' ' . ($apellidos ?? '')),
+                    'apodo' => $data['apodo'] ?? '',
+                    'dni' => $data['documento_identidad'] ?? '',
+                    'telefono' => $telefono ?? '',
+                    'estado_inscripcion' => 'PENDIENTE',
+                    'monto' => $eventoTicket['precio_inscripcion_peleador'] ?? 0,
+                    'evento_nombre' => $eventoTicket['nombre'] ?? 'Evento por anunciar',
+                    'evento_fecha' => $eventoTicket['fecha'] ?? null,
+                    'evento_hora' => $eventoTicket['hora'] ?? null,
+                    'evento_direccion' => $eventoTicket['direccion'] ?? 'Por confirmar',
+                ]);
+            } catch (Exception $e) {
+                error_log("Error generando ticket PDF de peleador: " . $e->getMessage());
+            }
+
             return [
                 "success" => true,
                 "message" => "Inscripción exitosa.",
                 "peleador_id" => $peleador_id,
                 "baked_url" => $baked_url,
+                "ticket_pdf_url" => ($ticketPdf && !empty($ticketPdf['success'])) ? ($ticketPdf['url'] ?? null) : null,
+                "ticket_pdf_template" => ($ticketPdf && !empty($ticketPdf['success'])) ? ($ticketPdf['template_code'] ?? null) : null,
                 "debug_info" => [
                     "files_received" => $_FILES,
                     "foto_final" => $foto_perfil
@@ -435,6 +461,10 @@
          * Obtener estado de inscripción del peleador en el evento activo
          */
         public function getInscripcionEvento($peleador_id) {
+            $traceId = $this->newPdfTraceId('get');
+            $this->logPdfFlow($traceId, 'getInscripcionEvento.start', [
+                'peleador_id' => (int)$peleador_id,
+            ]);
             try {
                 // Estado del peleador
                 $queryPeleador = "SELECT id, estado_inscripcion FROM peleadores WHERE id = :peleador_id LIMIT 1";
@@ -444,10 +474,14 @@
                 $peleador = $stmtPeleador->fetch(PDO::FETCH_ASSOC);
 
                 if (!$peleador) {
+                    $this->logPdfFlow($traceId, 'getInscripcionEvento.peleador_not_found', [
+                        'peleador_id' => (int)$peleador_id,
+                    ]);
                     http_response_code(404);
                     return [
                         "success" => false,
-                        "message" => "Peleador no encontrado"
+                        "message" => "Peleador no encontrado",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
@@ -464,11 +498,15 @@
                 $evento = $stmtEvento->fetch(PDO::FETCH_ASSOC);
 
                 if (!$evento) {
+                    $this->logPdfFlow($traceId, 'getInscripcionEvento.no_evento', [
+                        'peleador_id' => (int)$peleador_id,
+                    ]);
                     return [
                         "success" => true,
                         "estado_peleador" => $peleador['estado_inscripcion'],
                         "evento" => null,
-                        "inscripcion" => null
+                        "inscripcion" => null,
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
@@ -484,18 +522,204 @@
                 $stmtInscripcion->execute();
                 $inscripcion = $stmtInscripcion->fetch(PDO::FETCH_ASSOC);
 
+                $ticketPdf = $this->obtenerDocumentoPdf('fighter_inscripcion_ticket', 'peleador', (int)$peleador_id);
+                if ($inscripcion) {
+                    $comprobantePdf = $this->asegurarComprobanteInscripcionPdf((int)$inscripcion['id'], $traceId, 'getInscripcionEvento.read');
+                    if ($comprobantePdf) {
+                        $inscripcion['comprobante_pdf_url'] = $comprobantePdf['file_url'];
+                        $inscripcion['comprobante_pdf_token'] = $comprobantePdf['verification_token'];
+                    }
+                    $inscripcion['comprobante_pdf_view_api_url'] = '/api/comprobantes/viewPdf/' . (int)$inscripcion['id'];
+                    $inscripcion['comprobante_pdf_regenerar_api_url'] = '/api/comprobantes/pdf/' . (int)$inscripcion['id'];
+                }
+
+                $this->logPdfFlow($traceId, 'getInscripcionEvento.result', [
+                    'estado_peleador' => $peleador['estado_inscripcion'],
+                    'evento_id' => (int)($evento['id'] ?? 0),
+                    'inscripcion_id' => $inscripcion ? (int)$inscripcion['id'] : null,
+                    'ticket_pdf' => $ticketPdf,
+                    'comprobante_pdf_url' => $inscripcion['comprobante_pdf_url'] ?? null,
+                ]);
+
                 return [
                     "success" => true,
                     "estado_peleador" => $peleador['estado_inscripcion'],
                     "evento" => $evento ? $this->convertirTipos($evento) : null,
-                    "inscripcion" => $inscripcion ? $this->convertirTipos($inscripcion) : null
+                    "inscripcion" => $inscripcion ? $this->convertirTipos($inscripcion) : null,
+                    "ticket_pdf_url" => $ticketPdf['file_url'] ?? null,
+                    "ticket_pdf_token" => $ticketPdf['verification_token'] ?? null,
+                    "debug_trace_id" => $traceId
                 ];
             } catch (Exception $e) {
                 error_log("Error getInscripcionEvento: " . $e->getMessage());
+                $this->logPdfFlow($traceId, 'getInscripcionEvento.exception', [
+                    'error' => $e->getMessage(),
+                    'line' => $e->getLine(),
+                ]);
                 http_response_code(500);
                 return [
                     "success" => false,
-                    "message" => "Error al obtener estado de inscripción"
+                    "message" => "Error al obtener estado de inscripción",
+                    "debug_trace_id" => $traceId
+                ];
+            }
+        }
+
+        /**
+         * Regenerar manualmente el comprobante PDF de la inscripción del peleador.
+         * Útil para iterar diseño sin cambiar estado de pago.
+         */
+        public function regenerarComprobante($peleador_id, $data = []) {
+            $traceId = $this->newPdfTraceId('regen');
+            $this->logPdfFlow($traceId, 'regenerarComprobante.start', [
+                'peleador_id' => (int)$peleador_id,
+                'payload' => $data,
+            ]);
+
+            try {
+                $peleadorId = (int)$peleador_id;
+                $inscripcionId = (int)($data['inscripcion_id'] ?? 0);
+                $eventoId = (int)($data['evento_id'] ?? 0);
+
+                if ($peleadorId <= 0) {
+                    http_response_code(400);
+                    return [
+                        "success" => false,
+                        "message" => "peleador_id inválido",
+                        "debug_trace_id" => $traceId
+                    ];
+                }
+
+                $stmtPeleador = $this->db->prepare("SELECT id FROM peleadores WHERE id = :id LIMIT 1");
+                $stmtPeleador->execute([':id' => $peleadorId]);
+                if (!$stmtPeleador->fetch(PDO::FETCH_ASSOC)) {
+                    http_response_code(404);
+                    return [
+                        "success" => false,
+                        "message" => "Peleador no encontrado",
+                        "debug_trace_id" => $traceId
+                    ];
+                }
+
+                $inscripcion = null;
+                if ($inscripcionId > 0) {
+                    $stmtIns = $this->db->prepare("SELECT id, evento_id
+                                                   FROM inscripciones_eventos
+                                                   WHERE id = :id AND peleador_id = :peleador_id
+                                                   LIMIT 1");
+                    $stmtIns->execute([
+                        ':id' => $inscripcionId,
+                        ':peleador_id' => $peleadorId,
+                    ]);
+                    $inscripcion = $stmtIns->fetch(PDO::FETCH_ASSOC) ?: null;
+                } elseif ($eventoId > 0) {
+                    $stmtIns = $this->db->prepare("SELECT id, evento_id
+                                                   FROM inscripciones_eventos
+                                                   WHERE peleador_id = :peleador_id AND evento_id = :evento_id
+                                                   ORDER BY id DESC
+                                                   LIMIT 1");
+                    $stmtIns->execute([
+                        ':peleador_id' => $peleadorId,
+                        ':evento_id' => $eventoId,
+                    ]);
+                    $inscripcion = $stmtIns->fetch(PDO::FETCH_ASSOC) ?: null;
+                } else {
+                    $stmtIns = $this->db->prepare("SELECT ie.id, ie.evento_id
+                                                   FROM inscripciones_eventos ie
+                                                   INNER JOIN eventos e ON ie.evento_id = e.id
+                                                   WHERE ie.peleador_id = :peleador_id
+                                                     AND e.estado IN ('proximamente', 'activo')
+                                                   ORDER BY
+                                                     CASE WHEN e.estado = 'proximamente' THEN 0 ELSE 1 END,
+                                                     e.fecha ASC,
+                                                     ie.id DESC
+                                                   LIMIT 1");
+                    $stmtIns->execute([':peleador_id' => $peleadorId]);
+                    $inscripcion = $stmtIns->fetch(PDO::FETCH_ASSOC) ?: null;
+
+                    // Fallback: última inscripción histórica del peleador.
+                    if (!$inscripcion) {
+                        $stmtUltima = $this->db->prepare("SELECT id, evento_id
+                                                          FROM inscripciones_eventos
+                                                          WHERE peleador_id = :peleador_id
+                                                          ORDER BY id DESC
+                                                          LIMIT 1");
+                        $stmtUltima->execute([':peleador_id' => $peleadorId]);
+                        $inscripcion = $stmtUltima->fetch(PDO::FETCH_ASSOC) ?: null;
+                    }
+                }
+
+                if (!$inscripcion) {
+                    http_response_code(404);
+                    $this->logPdfFlow($traceId, 'regenerarComprobante.no_inscripcion', [
+                        'peleador_id' => $peleadorId,
+                        'inscripcion_id' => $inscripcionId,
+                        'evento_id' => $eventoId,
+                    ]);
+                    return [
+                        "success" => false,
+                        "message" => "No se encontró inscripción para regenerar comprobante",
+                        "debug_trace_id" => $traceId
+                    ];
+                }
+
+                $inscripcionTargetId = (int)$inscripcion['id'];
+                $inscripcionPdfData = $this->obtenerDatosInscripcionParaPdf($inscripcionTargetId);
+                if (!$inscripcionPdfData) {
+                    http_response_code(500);
+                    $this->logPdfFlow($traceId, 'regenerarComprobante.no_pdf_data', [
+                        'inscripcion_id' => $inscripcionTargetId,
+                    ]);
+                    return [
+                        "success" => false,
+                        "message" => "No se pudieron obtener datos para el comprobante",
+                        "debug_trace_id" => $traceId
+                    ];
+                }
+
+                require_once __DIR__ . '/../services/PdfService.php';
+                $pdfService = new PdfService($this->db);
+                $inscripcionPdfData['_debug_trace_id'] = $traceId;
+                $inscripcionPdfData['_debug_source'] = 'regenerarComprobante.manual';
+                $resultado = $pdfService->generarComprobanteInscripcionPeleador($inscripcionPdfData);
+
+                $this->logPdfFlow($traceId, 'regenerarComprobante.generation_result', [
+                    'inscripcion_id' => $inscripcionTargetId,
+                    'resultado' => $resultado,
+                ]);
+
+                if (empty($resultado['success'])) {
+                    http_response_code(500);
+                    return [
+                        "success" => false,
+                        "message" => $resultado['message'] ?? 'No se pudo regenerar el comprobante',
+                        "error" => $resultado['error'] ?? null,
+                        "debug_trace_id" => $traceId
+                    ];
+                }
+
+                $doc = $this->obtenerDocumentoPdf('fighter_inscripcion_comprobante', 'inscripcion_evento', $inscripcionTargetId);
+                return [
+                    "success" => true,
+                    "message" => "Comprobante regenerado correctamente",
+                    "inscripcion_id" => $inscripcionTargetId,
+                    "comprobante_pdf_url" => $doc['file_url'] ?? ($resultado['url'] ?? null),
+                    "comprobante_pdf_token" => $doc['verification_token'] ?? ($resultado['token'] ?? null),
+                    "comprobante_pdf_view_api_url" => '/api/comprobantes/viewPdf/' . $inscripcionTargetId,
+                    "comprobante_pdf_regenerar_api_url" => '/api/comprobantes/pdf/' . $inscripcionTargetId,
+                    "debug_trace_id" => $traceId
+                ];
+            } catch (Exception $e) {
+                error_log("Error regenerarComprobante: " . $e->getMessage());
+                $this->logPdfFlow($traceId, 'regenerarComprobante.exception', [
+                    'error' => $e->getMessage(),
+                    'line' => $e->getLine(),
+                ]);
+                http_response_code(500);
+                return [
+                    "success" => false,
+                    "message" => "Error al regenerar comprobante",
+                    "debug_trace_id" => $traceId
                 ];
             }
         }
@@ -603,13 +827,27 @@
          * El peleador decide inscribirse y luego elige método de pago
          */
         public function crearInscripcion($peleador_id) {
+            $rawBody = file_get_contents('php://input');
+            $traceId = $this->newPdfTraceId('crear');
+            $this->logPdfFlow($traceId, 'crearInscripcion.start', [
+                'peleador_id' => (int)$peleador_id,
+                'raw_body' => $rawBody,
+                'files_keys' => array_keys($_FILES ?? []),
+            ]);
             try {
-                $data = json_decode(file_get_contents('php://input'), true);
+                $data = json_decode($rawBody, true);
                 $evento_id = $data['evento_id'] ?? null;
+                $this->logPdfFlow($traceId, 'crearInscripcion.body_decoded', [
+                    'data' => $data,
+                    'evento_id' => $evento_id,
+                ]);
 
                 if (!$evento_id) {
+                    $this->logPdfFlow($traceId, 'crearInscripcion.validation_error', [
+                        'reason' => 'evento_id es requerido',
+                    ]);
                     http_response_code(400);
-                    return ["success" => false, "message" => "evento_id es requerido"];
+                    return ["success" => false, "message" => "evento_id es requerido", "debug_trace_id" => $traceId];
                 }
 
                 // Verificar que el peleador existe y no está rechazado
@@ -618,12 +856,14 @@
                 $peleador = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if (!$peleador) {
+                    $this->logPdfFlow($traceId, 'crearInscripcion.peleador_not_found', ['peleador_id' => (int)$peleador_id]);
                     http_response_code(404);
-                    return ["success" => false, "message" => "Peleador no encontrado"];
+                    return ["success" => false, "message" => "Peleador no encontrado", "debug_trace_id" => $traceId];
                 }
                 if ($peleador['estado_inscripcion'] === 'rechazado') {
+                    $this->logPdfFlow($traceId, 'crearInscripcion.peleador_rechazado', ['peleador_id' => (int)$peleador_id]);
                     http_response_code(400);
-                    return ["success" => false, "message" => "Tu perfil ha sido rechazado. Contacta al administrador."];
+                    return ["success" => false, "message" => "Tu perfil ha sido rechazado. Contacta al administrador.", "debug_trace_id" => $traceId];
                 }
 
                 // Verificar que el evento existe y está activo
@@ -632,15 +872,28 @@
                 $evento = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if (!$evento) {
+                    $this->logPdfFlow($traceId, 'crearInscripcion.evento_not_available', ['evento_id' => (int)$evento_id]);
                     http_response_code(400);
-                    return ["success" => false, "message" => "Evento no disponible para inscripción"];
+                    return ["success" => false, "message" => "Evento no disponible para inscripción", "debug_trace_id" => $traceId];
                 }
 
                 // Verificar si ya existe inscripción
                 $stmt = $this->db->prepare("SELECT id FROM inscripciones_eventos WHERE peleador_id = :pid AND evento_id = :eid LIMIT 1");
                 $stmt->execute([':pid' => $peleador_id, ':eid' => $evento_id]);
-                if ($stmt->fetch()) {
-                    return ["success" => true, "message" => "Ya estás inscrito en este evento"];
+                $inscripcionExistente = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($inscripcionExistente) {
+                    $inscripcionIdExistente = (int)$inscripcionExistente['id'];
+                    $this->logPdfFlow($traceId, 'crearInscripcion.already_exists', [
+                        'inscripcion_id' => $inscripcionIdExistente,
+                    ]);
+                    $comprobanteExistente = $this->asegurarComprobanteInscripcionPdf($inscripcionIdExistente, $traceId, 'crearInscripcion.exists');
+                    return [
+                        "success" => true,
+                        "message" => "Ya estás inscrito en este evento",
+                        "inscripcion_id" => $inscripcionIdExistente,
+                        "comprobante_pdf_url" => $comprobanteExistente['file_url'] ?? null,
+                        "debug_trace_id" => $traceId
+                    ];
                 }
 
                 // Crear inscripción con estado inscrito, sin método de pago
@@ -656,16 +909,33 @@
 
                 $inscripcion_id = $this->db->lastInsertId();
                 error_log("✅ INSCRIPCIÓN CREADA (ID: $inscripcion_id) peleador $peleador_id → evento $evento_id");
+                $this->logPdfFlow($traceId, 'crearInscripcion.inserted', [
+                    'inscripcion_id' => (int)$inscripcion_id,
+                    'evento_id' => (int)$evento_id,
+                ]);
+
+                $comprobantePdf = $this->asegurarComprobanteInscripcionPdf((int)$inscripcion_id, $traceId, 'crearInscripcion.new');
+                $this->logPdfFlow($traceId, 'crearInscripcion.pdf_result', [
+                    'inscripcion_id' => (int)$inscripcion_id,
+                    'pdf' => $comprobantePdf,
+                ]);
 
                 return [
                     "success" => true,
                     "message" => "Inscripción creada. Ahora selecciona tu método de pago.",
-                    "inscripcion_id" => (int)$inscripcion_id
+                    "inscripcion_id" => (int)$inscripcion_id,
+                    "comprobante_pdf_url" => $comprobantePdf['file_url'] ?? null,
+                    "debug_trace_id" => $traceId
                 ];
             } catch (PDOException $e) {
                 error_log("Error crearInscripcion: " . $e->getMessage());
+                $this->logPdfFlow($traceId, 'crearInscripcion.exception', [
+                    'error' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                    'line' => $e->getLine(),
+                ]);
                 http_response_code(500);
-                return ["success" => false, "message" => "Error al crear inscripción"];
+                return ["success" => false, "message" => "Error al crear inscripción", "debug_trace_id" => $traceId];
             }
         }
 
@@ -673,12 +943,22 @@
          * Inscribir peleador al evento activo con método de pago y comprobante opcional
          */
         public function inscribirEvento($peleador_id, $data) {
+            $traceId = $this->newPdfTraceId('inscribir');
+            $this->logPdfFlow($traceId, 'inscribirEvento.start', [
+                'peleador_id' => (int)$peleador_id,
+                'data' => $data,
+                'files' => $_FILES ?? [],
+            ]);
             try {
                 if (!isset($data['evento_id']) || !isset($data['metodo_pago']) || $data['metodo_pago'] === '') {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.validation_error', [
+                        'reason' => 'evento_id y metodo_pago son requeridos',
+                    ]);
                     http_response_code(400);
                     return [
                         "success" => false,
-                        "message" => "evento_id y metodo_pago son requeridos"
+                        "message" => "evento_id y metodo_pago son requeridos",
+                        "debug_trace_id" => $traceId
                     ];
                 }
                 $metodoPago = strtolower(trim($data['metodo_pago']));
@@ -691,10 +971,12 @@
                 $peleador = $stmtPeleador->fetch(PDO::FETCH_ASSOC);
 
                 if (!$peleador) {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.peleador_not_found', ['peleador_id' => (int)$peleador_id]);
                     http_response_code(404);
                     return [
                         "success" => false,
-                        "message" => "Peleador no encontrado"
+                        "message" => "Peleador no encontrado",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
@@ -702,10 +984,12 @@
                 // Ya no se requiere aprobación previa para pagar
                 // El pago es requisito para la aprobación, no al revés
                 if ($peleador['estado_inscripcion'] === 'rechazado') {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.peleador_rechazado', ['peleador_id' => (int)$peleador_id]);
                     http_response_code(400);
                     return [
                         "success" => false,
-                        "message" => "Tu perfil ha sido rechazado. Contacta al administrador."
+                        "message" => "Tu perfil ha sido rechazado. Contacta al administrador.",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
@@ -720,20 +1004,30 @@
                 $metodo = $stmtMetodo->fetch(PDO::FETCH_ASSOC);
 
                 if (!$metodo || (int)$metodo['activo'] !== 1) {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.metodo_invalido', [
+                        'metodo_pago' => $metodoPago,
+                        'metodo_db' => $metodo,
+                    ]);
                     http_response_code(400);
                     return [
                         "success" => false,
-                        "message" => "Método de pago inválido o inactivo"
+                        "message" => "Método de pago inválido o inactivo",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
                 $tieneComprobanteArchivo = isset($_FILES['comprobante']) && $_FILES['comprobante']['error'] === UPLOAD_ERR_OK;
                 $tieneComprobanteTexto = isset($data['comprobante_pago']) && trim((string)$data['comprobante_pago']) !== '';
                 if ((int)$metodo['requiere_comprobante'] === 1 && !$tieneComprobanteArchivo && !$tieneComprobanteTexto) {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.comprobante_required_missing', [
+                        'metodo_pago' => $metodoPago,
+                        'requiere_comprobante' => (int)$metodo['requiere_comprobante'],
+                    ]);
                     http_response_code(400);
                     return [
                         "success" => false,
-                        "message" => "Este método de pago requiere comprobante"
+                        "message" => "Este método de pago requiere comprobante",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
@@ -749,10 +1043,14 @@
                 $evento = $stmtEvento->fetch(PDO::FETCH_ASSOC);
 
                 if (!$evento) {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.evento_not_available', [
+                        'evento_id' => (int)$data['evento_id'],
+                    ]);
                     http_response_code(404);
                     return [
                         "success" => false,
-                        "message" => "Evento no encontrado o no disponible"
+                        "message" => "Evento no encontrado o no disponible",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
@@ -771,6 +1069,14 @@
 
                     if (move_uploaded_file($_FILES['comprobante']['tmp_name'], $destination)) {
                         $comprobantePath = 'files/comprobantes/' . $filename;
+                        $this->logPdfFlow($traceId, 'inscribirEvento.comprobante_uploaded', [
+                            'comprobante_path' => $comprobantePath,
+                        ]);
+                    } else {
+                        $this->logPdfFlow($traceId, 'inscribirEvento.comprobante_upload_failed', [
+                            'destination' => $destination,
+                            'file' => $_FILES['comprobante'] ?? null,
+                        ]);
                     }
                 }
 
@@ -803,6 +1109,10 @@
                     $stmtUpdate->execute();
                     $inscripcionId = $inscripcionExistente['id'];
                     error_log("✅ INSCRIPCIÓN ACTUALIZADA (ID: $inscripcionId) con método $metodoPago");
+                    $this->logPdfFlow($traceId, 'inscribirEvento.updated', [
+                        'inscripcion_id' => (int)$inscripcionId,
+                        'metodo_pago' => $metodoPago,
+                    ]);
                 } else {
                     // INSERTAR nueva inscripción (caso de fallback)
                     $queryInsert = "INSERT INTO inscripciones_eventos
@@ -818,14 +1128,26 @@
                     $stmtInsert->execute();
                     $inscripcionId = $this->db->lastInsertId();
                     error_log("✅ INSCRIPCIÓN NUEVA CREADA (ID: $inscripcionId)");
+                    $this->logPdfFlow($traceId, 'inscribirEvento.inserted', [
+                        'inscripcion_id' => (int)$inscripcionId,
+                        'metodo_pago' => $metodoPago,
+                    ]);
                 }
 
                 $this->db->commit();
 
+                $comprobantePdf = $this->asegurarComprobanteInscripcionPdf((int)$inscripcionId, $traceId, 'inscribirEvento.save', true);
+                $this->logPdfFlow($traceId, 'inscribirEvento.pdf_result', [
+                    'inscripcion_id' => (int)$inscripcionId,
+                    'pdf' => $comprobantePdf,
+                ]);
+
                 return [
                     "success" => true,
                     "message" => "Inscripción registrada correctamente",
-                    "inscripcion_id" => (int)$inscripcionId
+                    "inscripcion_id" => (int)$inscripcionId,
+                    "comprobante_pdf_url" => $comprobantePdf['file_url'] ?? null,
+                    "debug_trace_id" => $traceId
                 ];
             } catch (PDOException $e) {
                 if ($this->db->inTransaction()) {
@@ -834,18 +1156,29 @@
 
                 // Duplicado por unique(peleador_id, evento_id)
                 if ($e->getCode() == 23000) {
+                    $this->logPdfFlow($traceId, 'inscribirEvento.duplicate', [
+                        'error' => $e->getMessage(),
+                        'code' => $e->getCode(),
+                    ]);
                     http_response_code(400);
                     return [
                         "success" => false,
-                        "message" => "Ya estás inscrito en este evento"
+                        "message" => "Ya estás inscrito en este evento",
+                        "debug_trace_id" => $traceId
                     ];
                 }
 
                 error_log("Error inscribirEvento: " . $e->getMessage());
+                $this->logPdfFlow($traceId, 'inscribirEvento.exception', [
+                    'error' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                    'line' => $e->getLine(),
+                ]);
                 http_response_code(500);
                 return [
                     "success" => false,
-                    "message" => "Error al registrar inscripción"
+                    "message" => "Error al registrar inscripción",
+                    "debug_trace_id" => $traceId
                 ];
             }
         }
@@ -898,6 +1231,35 @@
             ];
         }
 
+        private function newPdfTraceId($prefix = 'pdf') {
+            return $prefix . '_' . date('Ymd_His') . '_' . substr(md5(uniqid((string)mt_rand(), true)), 0, 8);
+        }
+
+        private function logPdfFlow($traceId, $step, $context = []) {
+            try {
+                $payload = [
+                    'time' => date('Y-m-d H:i:s'),
+                    'trace_id' => $traceId ?: 'no-trace',
+                    'step' => $step,
+                    'context' => $context,
+                ];
+                $line = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($line === false) {
+                    $line = json_encode([
+                        'time' => date('Y-m-d H:i:s'),
+                        'trace_id' => $traceId ?: 'no-trace',
+                        'step' => $step,
+                        'context' => 'json_encode_failed',
+                    ]);
+                }
+
+                $logPath = __DIR__ . '/../files/debug_pdf_flow.log';
+                file_put_contents($logPath, $line . PHP_EOL, FILE_APPEND);
+            } catch (Exception $e) {
+                error_log('logPdfFlow error: ' . $e->getMessage());
+            }
+        }
+
         /**
          * Convertir tipos de datos para JSON
          */
@@ -909,6 +1271,190 @@
             if ($peso <= 73) return 'Mediano';
             if ($peso <= 79) return 'Mediopesado';
             return 'Pesado';
+        }
+
+        private function obtenerEventoParaTicket() {
+            try {
+                $query = "SELECT id, nombre, fecha, hora, direccion, precio_inscripcion_peleador
+                          FROM eventos
+                          WHERE estado IN ('proximamente', 'activo')
+                          ORDER BY
+                            CASE WHEN estado = 'proximamente' THEN 0 ELSE 1 END,
+                            fecha ASC
+                          LIMIT 1";
+                $stmt = $this->db->prepare($query);
+                $stmt->execute();
+                $evento = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                return $evento ?: null;
+            } catch (Exception $e) {
+                error_log("Error obtenerEventoParaTicket: " . $e->getMessage());
+                return null;
+            }
+        }
+
+        private function obtenerDocumentoPdf($documentType, $entityType, $entityId) {
+            try {
+                $query = "SELECT id, file_path, file_url, verification_token
+                          FROM pdf_documents
+                          WHERE document_type = :document_type
+                            AND entity_type = :entity_type
+                            AND entity_id = :entity_id
+                          ORDER BY id DESC
+                          LIMIT 1";
+                $stmt = $this->db->prepare($query);
+                $stmt->execute([
+                    ':document_type' => $documentType,
+                    ':entity_type' => $entityType,
+                    ':entity_id' => $entityId,
+                ]);
+                return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            } catch (Exception $e) {
+                error_log("Error obtenerDocumentoPdf: " . $e->getMessage());
+                return null;
+            }
+        }
+
+        private function asegurarComprobanteInscripcionPdf($inscripcionId, $traceId = null, $source = null, $forceRegenerate = false) {
+            $inscripcionId = (int)$inscripcionId;
+            if ($inscripcionId <= 0) {
+                $this->logPdfFlow($traceId, 'asegurarComprobante.invalid_id', [
+                    'source' => $source,
+                    'inscripcion_id' => $inscripcionId,
+                ]);
+                return null;
+            }
+
+            try {
+                $this->logPdfFlow($traceId, 'asegurarComprobante.start', [
+                    'source' => $source,
+                    'inscripcion_id' => $inscripcionId,
+                ]);
+                $documento = $this->obtenerDocumentoPdf(
+                    'fighter_inscripcion_comprobante',
+                    'inscripcion_evento',
+                    $inscripcionId
+                );
+                $this->logPdfFlow($traceId, 'asegurarComprobante.documento_actual', [
+                    'source' => $source,
+                    'documento' => $documento,
+                ]);
+
+                // Si ya existe documento registrado y el archivo está disponible, reutilizar (salvo force).
+                if (!$forceRegenerate && $documento && !empty($documento['file_path'])) {
+                    $absolutePath = __DIR__ . '/../' . ltrim($documento['file_path'], '/');
+                    if (file_exists($absolutePath)) {
+                        $this->logPdfFlow($traceId, 'asegurarComprobante.reuse_existing', [
+                            'source' => $source,
+                            'absolute_path' => $absolutePath,
+                        ]);
+                        return $documento;
+                    }
+                    $this->logPdfFlow($traceId, 'asegurarComprobante.missing_file', [
+                        'source' => $source,
+                        'absolute_path' => $absolutePath,
+                    ]);
+                }
+
+                require_once __DIR__ . '/../services/PdfService.php';
+                $pdfService = new PdfService($this->db);
+                $inscripcionPdfData = $this->obtenerDatosInscripcionParaPdf($inscripcionId);
+                $this->logPdfFlow($traceId, 'asegurarComprobante.data_for_pdf', [
+                    'source' => $source,
+                    'inscripcion_data' => $inscripcionPdfData,
+                ]);
+
+                if (!$inscripcionPdfData) {
+                    $this->logPdfFlow($traceId, 'asegurarComprobante.no_data', [
+                        'source' => $source,
+                        'inscripcion_id' => $inscripcionId,
+                    ]);
+                    return $documento;
+                }
+
+                $inscripcionPdfData['_debug_trace_id'] = $traceId;
+                $inscripcionPdfData['_debug_source'] = $source;
+                $resultado = $pdfService->generarComprobanteInscripcionPeleador($inscripcionPdfData);
+                $this->logPdfFlow($traceId, 'asegurarComprobante.generation_result', [
+                    'source' => $source,
+                    'resultado' => $resultado,
+                ]);
+                if (!empty($resultado['success'])) {
+                    $documentoNuevo = $this->obtenerDocumentoPdf(
+                        'fighter_inscripcion_comprobante',
+                        'inscripcion_evento',
+                        $inscripcionId
+                    );
+                    $this->logPdfFlow($traceId, 'asegurarComprobante.documento_nuevo', [
+                        'source' => $source,
+                        'documento' => $documentoNuevo,
+                    ]);
+
+                    if ($documentoNuevo) {
+                        return $documentoNuevo;
+                    }
+
+                    return [
+                        'file_path' => $resultado['file_path'] ?? null,
+                        'file_url' => $resultado['url'] ?? null,
+                        'verification_token' => $resultado['token'] ?? null,
+                    ];
+                }
+
+                if (!empty($resultado['error'])) {
+                    error_log('asegurarComprobanteInscripcionPdf: ' . $resultado['error']);
+                    $this->logPdfFlow($traceId, 'asegurarComprobante.error_result', [
+                        'source' => $source,
+                        'error' => $resultado['error'],
+                    ]);
+                }
+            } catch (Exception $e) {
+                error_log('Error asegurarComprobanteInscripcionPdf: ' . $e->getMessage());
+                $this->logPdfFlow($traceId, 'asegurarComprobante.exception', [
+                    'source' => $source,
+                    'error' => $e->getMessage(),
+                    'line' => $e->getLine(),
+                ]);
+            }
+
+            return null;
+        }
+
+        private function obtenerDatosInscripcionParaPdf($inscripcionId) {
+            try {
+                $query = "SELECT
+                            ie.id,
+                            ie.peleador_id,
+                            ie.evento_id,
+                            ie.estado_pago,
+                            ie.monto_pagado,
+                            ie.fecha_pago,
+                            ie.metodo_pago,
+                            ie.fecha_inscripcion,
+                            p.documento_identidad as peleador_dni,
+                            p.apodo as peleador_apodo,
+                            u.nombre as peleador_nombre,
+                            u.apellidos as peleador_apellidos,
+                            u.telefono as peleador_telefono,
+                            e.nombre as evento_nombre,
+                            e.fecha as evento_fecha,
+                            e.hora as evento_hora,
+                            e.direccion as evento_direccion,
+                            e.precio_inscripcion_peleador
+                          FROM inscripciones_eventos ie
+                          INNER JOIN peleadores p ON ie.peleador_id = p.id
+                          INNER JOIN usuarios u ON p.usuario_id = u.id
+                          INNER JOIN eventos e ON ie.evento_id = e.id
+                          WHERE ie.id = :id
+                          LIMIT 1";
+                $stmt = $this->db->prepare($query);
+                $stmt->bindParam(':id', $inscripcionId, PDO::PARAM_INT);
+                $stmt->execute();
+                return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            } catch (Exception $e) {
+                error_log("Error obtenerDatosInscripcionParaPdf: " . $e->getMessage());
+                return null;
+            }
         }
 
         private function convertirTipos($data) {

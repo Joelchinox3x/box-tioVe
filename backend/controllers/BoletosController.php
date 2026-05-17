@@ -16,9 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Solo cargar database.php si no se llamó desde index.php
+// Solo cargar Database.php si no se llamó desde index.php
 if (!defined('SKIP_ROUTING')) {
-    require_once __DIR__ . '/../config/database.php';
+    require_once __DIR__ . '/../config/Database.php';
 }
 
 class BoletosController {
@@ -35,24 +35,44 @@ class BoletosController {
      */
     public function getTiposBoleto($eventoId) {
         try {
+            // Consulta directa para diagnóstico
             $stmt = $this->db->prepare("
                 SELECT
                     id,
                     evento_id,
-                    tipo_nombre as nombre,
+                    nombre,
                     precio,
                     cantidad_total,
                     cantidad_vendida,
-                    cantidad_disponible,
+                    (cantidad_total - cantidad_vendida) as cantidad_disponible,
                     color_hex,
                     descripcion,
                     activo
-                FROM vista_boletos_disponibles
+                FROM tipos_boleto
                 WHERE evento_id = ? AND activo = 1
                 ORDER BY id ASC
             ");
             $stmt->execute([$eventoId]);
             $tipos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (count($tipos) === 0) {
+                $stmtCheck = $this->db->prepare("SELECT id, nombre, estado FROM eventos WHERE id = ?");
+                $stmtCheck->execute([$eventoId]);
+                $evento = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$evento) {
+                    $msg = "Error: El evento con ID #$eventoId no existe en la base de datos.";
+                } else {
+                    $msg = "El evento '{$evento['nombre']}' existe (Estado: {$evento['estado']}), pero no tiene ningún tipo de boleto creado en la tabla 'tipos_boleto'.";
+                }
+
+                echo json_encode([
+                    'success' => false,
+                    'message' => $msg,
+                    'data' => []
+                ]);
+                return;
+            }
 
             // Convertir tipos de datos
             foreach ($tipos as &$tipo) {
@@ -73,7 +93,7 @@ class BoletosController {
             http_response_code(500);
             echo json_encode([
                 'success' => false,
-                'error' => $e->getMessage()
+                'message' => "Error de base de datos: " . $e->getMessage()
             ]);
         }
     }
@@ -83,8 +103,14 @@ class BoletosController {
      * Crear solicitud de compra de boleto
      */
     public function crearSolicitudCompra() {
+        // Iniciar buffer para capturar salidas inesperadas
+        ob_start();
+        // Asegurar respuesta JSON
+        header('Content-Type: application/json');
+        
         try {
-            $data = json_decode(file_get_contents('php://input'), true);
+            $input = file_get_contents('php://input');
+            $data = json_decode($input, true);
 
             // Validar datos requeridos
             $required = ['evento_id', 'tipo_boleto_id', 'nombres_apellidos', 'telefono', 'dni', 'cantidad'];
@@ -99,12 +125,9 @@ class BoletosController {
                 throw new Exception("El DNI debe tener 8 dígitos numéricos");
             }
 
-            // Validar teléfono (9 dígitos empezando con 9)
+            // Validar teléfono
             $telefono = preg_replace('/\s+/', '', $data['telefono']);
-            if (!preg_match('/^9\d{8}$/', $telefono)) {
-                throw new Exception("El teléfono debe empezar con 9 y tener 9 dígitos");
-            }
-
+            
             // Verificar disponibilidad
             $stmt = $this->db->prepare("
                 SELECT cantidad_total, cantidad_vendida, precio
@@ -129,28 +152,44 @@ class BoletosController {
             // Generar código QR único
             $codigoQR = $this->generarCodigoQR($data['evento_id']);
 
-            // Insertar solicitud de compra
-            $stmt = $this->db->prepare("
-                INSERT INTO boletos_vendidos (
-                    evento_id, tipo_boleto_id, vendedor_id,
-                    comprador_nombres_apellidos, comprador_telefono, comprador_dni,
-                    cantidad, precio_total, codigo_qr,
-                    metodo_pago, estado_pago, estado_boleto
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', 'activo')
-            ");
+            // Buscar el ID del método de pago basado en el código enviado
+            $metodoPagoId = null;
+            $metodoCodigo = $data['metodo_pago'] ?? 'yape';
+            try {
+                $stmtMetodo = $this->db->prepare("SELECT id FROM metodos_pago WHERE codigo = ? LIMIT 1");
+                $stmtMetodo->execute([$metodoCodigo]);
+                $metodoRow = $stmtMetodo->fetch(PDO::FETCH_ASSOC);
+                if ($metodoRow) {
+                    $metodoPagoId = $metodoRow['id'];
+                }
+            } catch (Exception $metodoEx) {
+                error_log("Error buscando ID de método de pago: " . $metodoEx->getMessage());
+            }
 
-            $stmt->execute([
-                $data['evento_id'],
-                $data['tipo_boleto_id'],
-                $data['vendedor_id'] ?? null,
-                $data['nombres_apellidos'],
-                $telefono,
-                $data['dni'],
-                $data['cantidad'],
-                $precioTotal,
-                $codigoQR,
-                $data['metodo_pago'] ?? 'yape'
-            ]);
+            // Insertar solicitud de compra con vínculo profesional
+        $stmt = $this->db->prepare("
+            INSERT INTO boletos_vendidos (
+                evento_id, tipo_boleto_id, vendedor_id, usuario_id,
+                comprador_nombres_apellidos, comprador_telefono, comprador_dni,
+                cantidad, precio_total, codigo_qr,
+                metodo_pago, metodo_pago_id, estado_pago, estado_boleto
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', 'activo')
+        ");
+
+        $stmt->execute([
+            $data['evento_id'],
+            $data['tipo_boleto_id'],
+            $data['vendedor_id'] ?? null,
+            $data['usuario_id'] ?? null, // Nuevo campo
+            $data['nombres_apellidos'],
+            $telefono,
+            $data['dni'],
+            $data['cantidad'],
+            $precioTotal,
+            $codigoQR,
+            $metodoCodigo,
+            $metodoPagoId
+        ]);
 
             $boletoId = $this->db->lastInsertId();
 
@@ -162,22 +201,69 @@ class BoletosController {
             ");
             $stmt->execute([$data['cantidad'], $data['tipo_boleto_id']]);
 
-            echo json_encode([
+            // Generar PDF inmediatamente
+            $pdfUrl = null;
+            try {
+                require_once __DIR__ . '/../services/PdfService.php';
+                $pdfService = new PdfService($this->db);
+                
+                // Obtener datos completos para el PDF
+                $stmtBoleto = $this->db->prepare("
+                    SELECT 
+                        bv.id, bv.evento_id, bv.tipo_boleto_id,
+                        bv.comprador_nombres_apellidos, bv.comprador_telefono,
+                        bv.comprador_dni, bv.cantidad, bv.precio_total,
+                        bv.codigo_qr, bv.metodo_pago,
+                        tb.nombre as tipo_boleto, tb.color_hex,
+                        e.nombre as evento_nombre, e.fecha as evento_fecha,
+                        e.hora as evento_hora, e.direccion as evento_direccion
+                    FROM boletos_vendidos bv
+                    JOIN tipos_boleto tb ON bv.tipo_boleto_id = tb.id
+                    JOIN eventos e ON bv.evento_id = e.id
+                    WHERE bv.id = ?
+                ");
+                $stmtBoleto->execute([$boletoId]);
+                $boletoData = $stmtBoleto->fetch(PDO::FETCH_ASSOC);
+
+                if ($boletoData) {
+                    $pdfResult = $pdfService->generarBoletoPdf($boletoData);
+                    if ($pdfResult['success']) {
+                        $pdfUrl = $pdfResult['url'];
+                    }
+                }
+            } catch (Exception $pdfEx) {
+                $errorMsg = "Error generando PDF inicial: " . $pdfEx->getMessage();
+                error_log($errorMsg);
+                file_put_contents(__DIR__ . '/../files/debug_pdf_error.txt', $errorMsg . "\n", FILE_APPEND);
+            }
+
+            $response = [
                 'success' => true,
                 'message' => 'Solicitud de compra creada. Procede a realizar el pago.',
                 'data' => [
                     'boleto_id' => $boletoId,
                     'codigo_qr' => $codigoQR,
                     'precio_total' => $precioTotal,
+                    'pdf_url' => $pdfUrl,
                     'mensaje_pago' => "Yapea S/$precioTotal al número 934-567-890 y sube tu comprobante"
                 ]
-            ]);
+            ];
 
-        } catch (Exception $e) {
+            // Limpiar buffer
+            ob_clean();
+            echo json_encode($response);
+            exit;
+
+        } catch (Throwable $e) {
             http_response_code(400);
+            error_log("Error en crearSolicitudCompra: " . $e->getMessage());
+            
             echo json_encode([
                 'success' => false,
-                'error' => $e->getMessage()
+                'message' => $e->getMessage(),
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile()
             ]);
         }
     }
@@ -309,17 +395,48 @@ class BoletosController {
                 $boletoId
             ]);
 
+            $pdfResult = null;
             if ($accion === 'aprobar') {
-                // TODO: Aquí se generaría el PDF del boleto y se enviaría por WhatsApp
-                $mensaje = "Pago aprobado. El boleto será generado y enviado.";
+                // Obtener datos completos del boleto para generar PDF
+                $stmtBoleto = $this->db->prepare("
+                    SELECT
+                        bv.id, bv.evento_id, bv.tipo_boleto_id,
+                        bv.comprador_nombres_apellidos, bv.comprador_telefono,
+                        bv.comprador_dni, bv.cantidad, bv.precio_total,
+                        bv.codigo_qr, bv.metodo_pago,
+                        tb.nombre as tipo_boleto, tb.color_hex,
+                        e.nombre as evento_nombre, e.fecha as evento_fecha,
+                        e.hora as evento_hora, e.direccion as evento_direccion
+                    FROM boletos_vendidos bv
+                    JOIN tipos_boleto tb ON bv.tipo_boleto_id = tb.id
+                    JOIN eventos e ON bv.evento_id = e.id
+                    WHERE bv.id = ?
+                ");
+                $stmtBoleto->execute([$boletoId]);
+                $boletoData = $stmtBoleto->fetch(PDO::FETCH_ASSOC);
+
+                if ($boletoData) {
+                    require_once __DIR__ . '/../services/PdfService.php';
+                    $pdfService = new PdfService($this->db);
+                    $pdfResult = $pdfService->generarBoletoPdf($boletoData);
+                }
+
+                $mensaje = "Pago aprobado.";
+                if ($pdfResult && $pdfResult['success']) {
+                    $mensaje .= " PDF del boleto generado.";
+                }
             } else {
                 $mensaje = "Pago rechazado.";
             }
 
-            echo json_encode([
+            $response = [
                 'success' => true,
                 'message' => $mensaje
-            ]);
+            ];
+            if ($pdfResult && $pdfResult['success']) {
+                $response['pdf_url'] = $pdfResult['url'];
+            }
+            echo json_encode($response);
 
         } catch (Exception $e) {
             http_response_code(400);
@@ -334,6 +451,61 @@ class BoletosController {
      * POST /boletos/validar-qr
      * Validar QR en la entrada del evento
      */
+    public function getMisBoletos($usuarioId) {
+        header('Content-Type: application/json');
+        
+        try {
+            if (!$usuarioId) {
+                throw new Exception("ID de usuario requerido");
+            }
+
+            // Obtener boletos con datos del evento y tipo, y URL del PDF si existe
+            $query = "
+                SELECT 
+                    bv.id, bv.codigo_qr, bv.cantidad, bv.precio_total, 
+                    bv.estado_pago, bv.fecha_compra,
+                    e.nombre as evento, e.fecha as evento_fecha, e.hora as evento_hora,
+                    tb.nombre as tipo_boleto, tb.color_hex,
+                    (SELECT file_url FROM pdf_documents 
+                     WHERE entity_type = 'boleto_vendido' 
+                       AND document_type = 'boleto_ticket' 
+                       AND entity_id = bv.id 
+                     ORDER BY id DESC LIMIT 1) as pdf_url
+                FROM boletos_vendidos bv
+                JOIN eventos e ON bv.evento_id = e.id
+                JOIN tipos_boleto tb ON bv.tipo_boleto_id = tb.id
+                WHERE bv.usuario_id = ?
+                ORDER BY bv.fecha_compra DESC
+            ";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$usuarioId]);
+            $boletos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Formatear datos
+            foreach ($boletos as &$boleto) {
+                // Si no hay PDF generado pero está verificado, usamos el endpoint para intentar generarlo/recuperarlo
+                // Pero idealmente debería tenerlo. Si es NULL, no tendrá link.
+                
+                // Formatear fecha
+                $boleto['fecha_fmt'] = date('d/m/Y', strtotime($boleto['evento_fecha']));
+                $boleto['hora_fmt'] = date('H:i', strtotime($boleto['evento_hora']));
+            }
+
+            echo json_encode([
+                'success' => true,
+                'boletos' => $boletos
+            ]);
+
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
     public function validarQR() {
         try {
             $data = json_decode(file_get_contents('php://input'), true);
@@ -406,6 +578,126 @@ class BoletosController {
     }
 
     /**
+     * GET /boletos/:id/pdf
+     * Obtener URL del PDF generado para un boleto
+     */
+    public function obtenerPdfBoleto($boletoId) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT file_url, verification_token
+                FROM pdf_documents
+                WHERE document_type = 'boleto_ticket'
+                  AND entity_type = 'boleto_vendido'
+                  AND entity_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$boletoId]);
+            $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$doc) {
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'PDF no encontrado para este boleto'
+                ]);
+                return;
+            }
+
+            echo json_encode([
+                'success' => true,
+                'pdf_url' => $doc['file_url'],
+                'token' => $doc['verification_token']
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * GET /verificar-boleto/:token
+     * Renderizar página HTML de verificación de boleto (QR scan)
+     */
+    public function verificarBoleto($token) {
+        try {
+            if (empty($token)) {
+                throw new Exception('Token requerido');
+            }
+
+            // Buscar documento PDF por token
+            $stmt = $this->db->prepare("
+                SELECT pd.entity_id, pd.file_url
+                FROM pdf_documents pd
+                WHERE pd.verification_token = ?
+                  AND pd.document_type = 'boleto_ticket'
+                LIMIT 1
+            ");
+            $stmt->execute([$token]);
+            $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$doc) {
+                // Renderizar vista con error
+                $valid = false;
+                $data = null;
+                $errorMsg = 'Boleto no encontrado o token inválido';
+                header('Content-Type: text/html; charset=UTF-8');
+                require __DIR__ . '/../views/verificar_boleto.php';
+                return;
+            }
+
+            // Obtener datos completos del boleto
+            $stmtBoleto = $this->db->prepare("
+                SELECT
+                    bv.id, bv.comprador_nombres_apellidos, bv.comprador_dni,
+                    bv.comprador_telefono, bv.cantidad, bv.precio_total,
+                    bv.codigo_qr, bv.estado_pago, bv.estado_boleto,
+                    bv.fecha_compra, bv.fecha_validacion, bv.fecha_uso,
+                    tb.nombre as tipo_boleto, tb.color_hex,
+                    e.nombre as evento_nombre, e.fecha as evento_fecha,
+                    e.hora as evento_hora, e.direccion as evento_direccion
+                FROM boletos_vendidos bv
+                JOIN tipos_boleto tb ON bv.tipo_boleto_id = tb.id
+                JOIN eventos e ON bv.evento_id = e.id
+                WHERE bv.id = ?
+            ");
+            $stmtBoleto->execute([$doc['entity_id']]);
+            $boleto = $stmtBoleto->fetch(PDO::FETCH_ASSOC);
+
+            if (!$boleto) {
+                $valid = false;
+                $data = null;
+                $errorMsg = 'Datos del boleto no encontrados';
+                header('Content-Type: text/html; charset=UTF-8');
+                require __DIR__ . '/../views/verificar_boleto.php';
+                return;
+            }
+
+            $valid = true;
+            $data = $boleto;
+            $errorMsg = null;
+
+            // Staff session check
+            session_start();
+            $staffLoggedIn = !empty($_SESSION['staff_logged_in']);
+            $staffName = $_SESSION['staff_name'] ?? '';
+
+            header('Content-Type: text/html; charset=UTF-8');
+            require __DIR__ . '/../views/verificar_boleto.php';
+
+        } catch (Exception $e) {
+            header('Content-Type: text/html; charset=UTF-8');
+            $valid = false;
+            $data = null;
+            $errorMsg = $e->getMessage();
+            require __DIR__ . '/../views/verificar_boleto.php';
+        }
+    }
+
+    /**
      * Generar código QR único
      */
     private function generarCodigoQR($eventoId) {
@@ -438,39 +730,5 @@ class BoletosController {
     }
 }
 
-// Ruteo interno solo si no es llamado desde index.php
-if (!defined('SKIP_ROUTING')) {
-    $controller = new BoletosController();
-    $method = $_SERVER['REQUEST_METHOD'];
-    $path = $_GET['path'] ?? '';
 
-    // Parsear path
-    $segments = explode('/', trim($path, '/'));
-
-    switch ($method) {
-        case 'GET':
-            if ($segments[0] === 'tipos-boleto' && isset($segments[1])) {
-                $controller->getTiposBoleto($segments[1]);
-            } elseif ($segments[0] === 'pendientes') {
-                $controller->getPagosPendientes();
-            }
-            break;
-
-        case 'POST':
-            if ($segments[0] === 'comprar') {
-                $controller->crearSolicitudCompra();
-            } elseif ($segments[0] === 'validar-qr') {
-                $controller->validarQR();
-            } elseif (isset($segments[0]) && $segments[1] === 'comprobante') {
-                $controller->subirComprobante($segments[0]);
-            }
-            break;
-
-        case 'PUT':
-            if (isset($segments[0]) && $segments[1] === 'validar') {
-                $controller->validarPago($segments[0]);
-            }
-            break;
-    }
-}
 ?>

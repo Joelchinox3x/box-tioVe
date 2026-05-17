@@ -1,10 +1,23 @@
 import api from './api';
+import { Platform } from 'react-native';
 import type {
   TipoBoleto,
   BoletoVendido,
-  ComprarBoletoRequest,
   ReporteBoletos,
 } from '../types';
+
+export interface ComprarBoletoRequest {
+  evento_id: number;
+  tipo_boleto_id: number;
+  comprador_nombres_apellidos: string;
+  comprador_telefono: string;
+  comprador_dni: string;
+  cantidad: number;
+  metodo_pago: string;
+  comprobante_pago?: any;
+  vendedor_id?: number | null;
+  usuario_id?: number;
+}
 
 export const boletosService = {
   /**
@@ -12,6 +25,9 @@ export const boletosService = {
    */
   async getTiposDisponibles(eventoId: number): Promise<TipoBoleto[]> {
     const response = await api.get(`/boletos/tipos-boleto/${eventoId}`);
+    if (response.data.success === false) {
+      throw new Error(response.data.message || 'No se pudieron cargar los tipos de boleto');
+    }
     return response.data.data || [];
   },
 
@@ -20,7 +36,7 @@ export const boletosService = {
    */
   async comprarBoleto(data: ComprarBoletoRequest) {
     const response = await api.post('/boletos/comprar', {
-      evento_id: data.tipo_boleto_id, // Se obtiene del tipo de boleto
+      evento_id: data.evento_id,
       tipo_boleto_id: data.tipo_boleto_id,
       nombres_apellidos: data.comprador_nombres_apellidos,
       telefono: data.comprador_telefono,
@@ -29,15 +45,16 @@ export const boletosService = {
       metodo_pago: data.metodo_pago,
       comprobante_pago: data.comprobante_pago,
       vendedor_id: data.vendedor_id,
+      usuario_id: data.usuario_id,
     });
     return response.data;
   },
 
   /**
-   * Obtener mis boletos por DNI
+   * Obtener mis boletos por Usuario ID
    */
-  async getMisBoletos(dni: string): Promise<BoletoVendido[]> {
-    const response = await api.get(`/boletos/mis-boletos/${dni}`);
+  async getMisBoletos(usuarioId: number): Promise<BoletoVendido[]> {
+    const response = await api.get(`/boletos/mis-boletos?usuario_id=${usuarioId}`);
     return response.data.boletos || [];
   },
 
@@ -52,9 +69,20 @@ export const boletosService = {
   /**
    * Subir comprobante de pago
    */
-  async subirComprobante(boletoId: number, archivo: File) {
+  async subirComprobante(boletoId: number, archivo: { uri: string; name: string; type: string }) {
     const formData = new FormData();
-    formData.append('comprobante', archivo);
+
+    if (Platform.OS === 'web') {
+      const response = await fetch(archivo.uri);
+      const blob = await response.blob();
+      formData.append('comprobante', blob, archivo.name);
+    } else {
+      formData.append('comprobante', {
+        uri: archivo.uri,
+        name: archivo.name,
+        type: archivo.type,
+      } as any);
+    }
 
     const response = await api.post(`/boletos/${boletoId}/comprobante`, formData, {
       headers: {

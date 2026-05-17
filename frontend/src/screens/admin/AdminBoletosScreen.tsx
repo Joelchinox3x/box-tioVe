@@ -13,6 +13,7 @@ import {
   RefreshControl,
   SafeAreaView,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -164,11 +165,17 @@ function PendientesTab({ loading, refreshing, onRefresh }: PendientesTabProps) {
   const handleValidar = async (boletoId: number, accion: 'aprobar' | 'rechazar') => {
     try {
       const response = await boletosService.validarPago(boletoId, accion);
+      console.log('🔍 Response validarPago:', response);
       if (response.success) {
-        Alert.alert('Éxito', response.message);
         loadPendientes();
-      } else {
-        Alert.alert('Error', response.message);
+        if (accion === 'aprobar') {
+          console.log('✅ Approved! Showing alert.');
+          setTimeout(() => {
+            Alert.alert('Éxito', 'Pago aprobado y boleto generado correctamente.', [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ]);
+          }, 100);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Error al validar pago');
@@ -199,7 +206,7 @@ function PendientesTab({ loading, refreshing, onRefresh }: PendientesTabProps) {
           <View key={boleto.id} style={styles.boletoCard}>
             <View style={styles.boletoHeader}>
               <Text style={styles.boletoComprador}>{boleto.comprador_nombres_apellidos}</Text>
-              <Text style={styles.boletoPrecio}>S/ {boleto.precio_total.toFixed(2)}</Text>
+              <Text style={styles.boletoPrecio}>S/ {Number(boleto.precio_total).toFixed(2)}</Text>
             </View>
 
             <View style={styles.boletoDetails}>
@@ -224,20 +231,7 @@ function PendientesTab({ loading, refreshing, onRefresh }: PendientesTabProps) {
             <View style={styles.boletoActions}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
-                onPress={() =>
-                  Alert.alert(
-                    'Rechazar pago',
-                    '¿Estás seguro de rechazar este pago?',
-                    [
-                      { text: 'Cancelar', style: 'cancel' },
-                      {
-                        text: 'Rechazar',
-                        style: 'destructive',
-                        onPress: () => handleValidar(boleto.id, 'rechazar'),
-                      },
-                    ]
-                  )
-                }
+                onPress={() => handleValidar(boleto.id, 'rechazar')}
               >
                 <Ionicons name="close-circle" size={20} color="#fff" />
                 <Text style={styles.actionButtonText}>Rechazar</Text>
@@ -245,19 +239,7 @@ function PendientesTab({ loading, refreshing, onRefresh }: PendientesTabProps) {
 
               <TouchableOpacity
                 style={[styles.actionButton, styles.approveButton]}
-                onPress={() =>
-                  Alert.alert(
-                    'Aprobar pago',
-                    '¿Confirmar que el pago es válido?',
-                    [
-                      { text: 'Cancelar', style: 'cancel' },
-                      {
-                        text: 'Aprobar',
-                        onPress: () => handleValidar(boleto.id, 'aprobar'),
-                      },
-                    ]
-                  )
-                }
+                onPress={() => handleValidar(boleto.id, 'aprobar')}
               >
                 <Ionicons name="checkmark-circle" size={20} color="#fff" />
                 <Text style={styles.actionButtonText}>Aprobar</Text>
@@ -424,7 +406,7 @@ function ReportesTab({ loading, refreshing, onRefresh }: ReportesTabProps) {
               <View style={styles.totalItem}>
                 <Text style={styles.totalLabel}>Ingresos</Text>
                 <Text style={[styles.totalValue, styles.totalIngresos]}>
-                  S/ {reporte.totales.ingresos_totales.toFixed(2)}
+                  S/ {Number(reporte.totales.ingresos_totales).toFixed(2)}
                 </Text>
               </View>
             </View>
@@ -436,13 +418,13 @@ function ReportesTab({ loading, refreshing, onRefresh }: ReportesTabProps) {
             <View key={tipo.tipo_boleto} style={styles.tipoCard}>
               <View style={styles.tipoHeader}>
                 <Text style={styles.tipoNombre}>{tipo.tipo_boleto}</Text>
-                <Text style={styles.tipoPrecio}>S/ {tipo.precio.toFixed(2)}</Text>
+                <Text style={styles.tipoPrecio}>S/ {Number(tipo.precio).toFixed(2)}</Text>
               </View>
 
               <View style={styles.tipoStats}>
                 <StatItem label="Vendidos" value={tipo.total_vendidos.toString()} />
                 <StatItem label="Boletos" value={tipo.cantidad_boletos.toString()} />
-                <StatItem label="Ingresos" value={`S/ ${tipo.ingresos_total.toFixed(2)}`} />
+                <StatItem label="Ingresos" value={`S/ ${Number(tipo.ingresos_total).toFixed(2)}`} />
               </View>
 
               <View style={styles.tipoEstados}>
@@ -471,7 +453,8 @@ function TiposBoletosTab() {
       // Asumiendo que hay un endpoint para obtener tipos por evento
       // Por ahora usamos evento_id = 1
       const eventoId = 1;
-      const tipos = await boletosService.getTiposDisponibles(eventoId);
+      const tipos = await boletosService.getTiposPorEvento(eventoId);
+      console.log('[LOAD_TIPOS] Resultado:', JSON.stringify(tipos?.map((t: any) => ({ id: t.id, nombre: t.nombre, activo: t.activo, tipo_activo: typeof t.activo }))));
       setTipos(tipos || []);
     } catch (error) {
       console.error('Error loading tipos:', error);
@@ -496,34 +479,20 @@ function TiposBoletosTab() {
 
   const handleToggleActivo = async (id: number, isActivo: boolean) => {
     const accion = isActivo ? 'desactivar' : 'activar';
-    Alert.alert(
-      `${accion.charAt(0).toUpperCase() + accion.slice(1)} tipo de boleto`,
-      `¿Estás seguro de ${accion} este tipo de boleto?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: accion.charAt(0).toUpperCase() + accion.slice(1),
-          style: isActivo ? 'destructive' : 'default',
-          onPress: async () => {
-            try {
-              let response;
-              if (isActivo) {
-                response = await boletosService.desactivarTipoBoleto(id);
-              } else {
-                response = await boletosService.activarTipoBoleto(id);
-              }
-
-              if (response.success) {
-                Alert.alert('Éxito', `Tipo de boleto ${accion}do`);
-                loadTipos();
-              }
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      let response;
+      if (isActivo) {
+        response = await boletosService.desactivarTipoBoleto(id);
+      } else {
+        response = await boletosService.activarTipoBoleto(id);
+      }
+      if (response.success) {
+        loadTipos();
+      }
+    } catch (error: any) {
+      console.log(`[TOGGLE] Error:`, error?.response?.status, error?.response?.data);
+      Alert.alert('Error', error?.response?.data?.message || error.message);
+    }
   };
 
   if (loading) {
@@ -563,7 +532,7 @@ function TiposBoletosTab() {
                   <Ionicons name="ticket" size={24} color={tipo.color_hex} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.tipoManageNombre}>{tipo.nombre}</Text>
-                    <Text style={styles.tipoManagePrecio}>S/ {tipo.precio.toFixed(2)}</Text>
+                    <Text style={styles.tipoManagePrecio}>S/ {Number(tipo.precio).toFixed(2)}</Text>
                   </View>
                 </View>
 
